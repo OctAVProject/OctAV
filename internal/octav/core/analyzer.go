@@ -1,17 +1,17 @@
 package core
 
 import (
-	"github.com/OctAVProject/OctAV/internal/octav/core/analysis"
-	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/static"
-	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/OctAVProject/OctAV/internal/octav/core/analysis"
+	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/static"
+	"github.com/OctAVProject/OctAV/internal/octav/logger"
+	"github.com/rakyll/magicmime"
 	"io/ioutil"
-	"magicmime"
 )
 
 var supportedMIME = []string{

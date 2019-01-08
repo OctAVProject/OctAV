@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"go-flags"
-	"github.com/OctAVProject/OctAV/internal/octav/logger"
-	"os"
-	"github.com/OctAVProject/OctAV/internal/octav/scan"
-	"strings"
 	"github.com/OctAVProject/OctAV/internal/octav/core"
+	"github.com/OctAVProject/OctAV/internal/octav/logger"
+	"github.com/OctAVProject/OctAV/internal/octav/scan"
+	"github.com/jessevdk/go-flags"
+	"os"
+	"strings"
 )
 
 type positionalArgs struct {
