@@ -8,15 +8,13 @@ const (
 
 var verboseLevel = VERBOSE_INFO
 
-func SetVerboseLevel(level int) {
+func SetVerboseLevel(level string) {
 
-	if level > VERBOSE_DEBUG {
-		level = VERBOSE_DEBUG
+	if level == "DEBUG" {
+		verboseLevel = VERBOSE_DEBUG
+	} else if level == "INFO" {
+		verboseLevel = VERBOSE_INFO
+	} else if level == "WARNING" {
+		verboseLevel = VERBOSE_WARNING
 	}
-
-	verboseLevel = level
-}
-
-func GetVerboseLevel() int {
-	return verboseLevel
 }

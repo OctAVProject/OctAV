@@ -15,8 +15,7 @@ type positionalArgs struct {
 }
 
 var commandLine struct {
-	// Slice of bool will append 'true' each time the option is encountered (can be set multiple times, like -vvv)
-	Verbose        []bool         `short:"v" long:"verbose" description:"Show verbose debug information"`
+	Verbose        string         `short:"l" long:"log-level" description:"Log level" choice:"DEBUG" choice:"INFO" choice:"WARNING" default:"INFO"`
 	Fastscan       bool           `short:"s" long:"fast-scan" description:"Full scan of the system, really time consuming"`
 	Fullscan       bool           `long:"full-scan" description:"Smart scan, looking in most probable places"`
 	Configscan     bool           `long:"config-scan" description:"Look at config files for security issues"`
@@ -55,7 +54,7 @@ func main() {
 		logger.Fatal(fmt.Sprintf("Can't specify file '%s' when fullscan is used.\n", fileToScan))
 	}
 
-	logger.SetVerboseLevel(len(commandLine.Verbose))
+	logger.SetVerboseLevel(commandLine.Verbose)
 
 	if commandLine.Sync {
 		core.SyncDatabase()
@@ -65,7 +64,7 @@ func main() {
 		scan.FastScan()
 	} else if commandLine.Fullscan {
 		scan.FullScan()
-	} else {
+	} else if fileToScan != "" {
 		err := core.Analyse(fileToScan)
 
 		if err != nil {
