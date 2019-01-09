@@ -3,18 +3,17 @@ package core
 import (
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"gopkg.in/src-d/go-git.v4"
-	"log"
 	"os"
 	"path/filepath"
 )
 
-func SyncDatabase() {
+func SyncDatabase() error {
 	logger.Info("Start syncing database...")
 
 	databaseDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
 
 	if err != nil {
-		log.Fatal(err.Error())
+		logger.Fatal(err.Error())
 	}
 
 	currentDatabase, err := git.PlainClone(databaseDir+"/files", false, &git.CloneOptions{
@@ -29,15 +28,15 @@ func SyncDatabase() {
 		if err != nil {
 			logger.Error("Not able to load git repository : " + err.Error())
 			//TODO : force clone
-			return
+			return err
 		}
 
 		workTree, err := currentDatabase.Worktree()
 
 		if err != nil {
-			logger.Error("Not able to load git repository : " + err.Error())
+			logger.Error("Not able to build git work tree : " + err.Error())
 			//TODO : force clone
-			return
+			return err
 		}
 
 		err = workTree.Pull(&git.PullOptions{RemoteName: "origin"})
@@ -47,13 +46,13 @@ func SyncDatabase() {
 		} else if err != nil {
 			logger.Error("Not able to pull changes : " + err.Error())
 			//TODO : force clone ?
-			return
+			return err
 		} else {
 			logger.Info("The database has been updated.")
 		}
 	} else if err != nil {
 		logger.Error("Not able to sync database : " + err.Error())
-		return
+		return err
 	} else {
 		logger.Info("Database retrieved successfully.")
 	}
@@ -62,8 +61,9 @@ func SyncDatabase() {
 
 	if err != nil {
 		logger.Error(err.Error())
-		return
+		return err
 	}
 
 	logger.Debug("Latest commit : " + ref.Hash().String())
+	return nil
 }
