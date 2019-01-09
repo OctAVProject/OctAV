@@ -48,7 +48,7 @@ func Analyse(filename string) error {
 	threatScore, err := staticAnalysis(&exe)
 
 	if err != nil {
-		panic("Not able to perform static analysis.")
+		logger.Fatal("Not able to perform static analysis.")
 	}
 
 	fmt.Println("Score: ", threatScore)
@@ -58,7 +58,7 @@ func Analyse(filename string) error {
 	threatScore, err = dynamicAnalysis(&exe)
 
 	if err != nil {
-		panic("Not able to perform static analysis.")
+		logger.Fatal("Not able to perform dynamic analysis.")
 	}
 
 	fmt.Println("Score: ", threatScore)
