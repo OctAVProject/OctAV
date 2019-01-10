@@ -27,15 +27,34 @@ func IsHashKnownToBeMalicious(exe *analysis.Executable) (bool, error) {
 		}
 	}
 
+	return false, scanner.Err()
+}
+
+func IsSSDeepHashKnownToBeMalicious(exe *analysis.Executable) (bool, error) {
+	logger.Info("Comparing SSDeep hash signatures...")
+
+	filename := "files/hashes.ssdeep"
+
+	file, err := os.OpenFile(filename, os.O_RDONLY, os.ModePerm)
+
+	if err != nil {
+		return false, err
+	}
+
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		// TODO : compute distance instead of strict equality
+		if scanner.Text() == exe.SSDeep {
+			return true, nil
+		}
+	}
+
 	// Check local database hash existence
 	// If the database hasn't been built yet, suggest the user to do so
 
 	//Select in signature table a row with exe.MD5 hash
 	return false, scanner.Err()
-}
-
-func IsSSDeepHashKnownToBeMalicious(exe *analysis.Executable) (bool, error) {
-	// https://github.com/ssdeep-project/ssdeep
-	logger.Info("Comparing SSDeep hash signatures...")
-	return false, nil
 }
