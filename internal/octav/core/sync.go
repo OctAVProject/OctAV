@@ -16,14 +16,16 @@ func SyncDatabase() error {
 		logger.Fatal(err.Error())
 	}
 
-	currentDatabase, err := git.PlainClone(databaseDir+"/files", false, &git.CloneOptions{
+	repoPath := databaseDir + "/files"
+
+	currentDatabase, err := git.PlainClone(repoPath, false, &git.CloneOptions{
 		URL:      "https://github.com/OctAVProject/OctAV-Files",
 		Progress: nil,
 	})
 
 	if err == git.ErrRepositoryAlreadyExists {
 		logger.Debug("Pulling latest changes from repository...")
-		currentDatabase, err = git.PlainOpen(databaseDir)
+		currentDatabase, err = git.PlainOpen(repoPath)
 
 		if err != nil {
 			logger.Error("Not able to load git repository : " + err.Error())
@@ -39,13 +41,12 @@ func SyncDatabase() error {
 			return err
 		}
 
-		err = workTree.Pull(&git.PullOptions{RemoteName: "origin"})
+		err = workTree.Pull(&git.PullOptions{RemoteName: "origin", Force: true})
 
 		if err == git.NoErrAlreadyUpToDate {
 			logger.Info("The database is already up to date.")
 		} else if err != nil {
 			logger.Error("Not able to pull changes : " + err.Error())
-			//TODO : force clone ?
 			return err
 		} else {
 			logger.Info("The database has been updated.")

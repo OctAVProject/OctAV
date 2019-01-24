@@ -2,32 +2,66 @@ package static
 
 import (
 	"bufio"
+	"fmt"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"os"
+	"path/filepath"
 )
 
 func IsHashKnownToBeMalicious(exe *analysis.Executable) (bool, error) {
 	logger.Info("Comparing MD5 hash signatures...")
-	filename := "files/hashes.md5"
 
-	file, err := os.OpenFile(filename, os.O_RDONLY, os.ModePerm)
+	databaseDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+
+	if err != nil {
+		logger.Fatal(err.Error())
+	}
+
+	var md5HashesFiles []string
+
+	err = filepath.Walk(databaseDir+"/files/md5_hashes/", func(path string, info os.FileInfo, err error) error {
+
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			md5HashesFiles = append(md5HashesFiles, path)
+		}
+
+		return nil
+	})
 
 	if err != nil {
 		return false, err
 	}
 
-	defer file.Close()
+	for _, filename := range md5HashesFiles {
+		logger.Debug(fmt.Sprintf("Opening '%v' ...", filename))
 
-	scanner := bufio.NewScanner(file)
+		file, err := os.OpenFile(filename, os.O_RDONLY, os.ModePerm)
 
-	for scanner.Scan() {
-		if scanner.Text() == exe.MD5 {
-			return true, nil
+		if err != nil {
+			return false, err
+		}
+
+		defer file.Close()
+
+		scanner := bufio.NewScanner(file)
+
+		for scanner.Scan() {
+			if scanner.Text() == exe.MD5 {
+				return true, nil
+			}
+		}
+
+		if scanner.Err() != nil {
+			return false, scanner.Err()
 		}
 	}
 
-	return false, scanner.Err()
+	return false, nil
 }
 
 func IsSSDeepHashKnownToBeMalicious(exe *analysis.Executable) (bool, error) {
