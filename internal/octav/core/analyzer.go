@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/static"
@@ -22,7 +23,7 @@ func Analyse(filename string) error {
 	threatScore, err := staticAnalysis(exe)
 
 	if err != nil {
-		logger.Fatal("Not able to perform static analysis.")
+		return errors.New("Not able to perform static analysis : " + err.Error())
 	}
 
 	fmt.Println("Score: ", threatScore)
@@ -32,7 +33,7 @@ func Analyse(filename string) error {
 	threatScore, err = dynamicAnalysis(exe)
 
 	if err != nil {
-		logger.Fatal("Not able to perform dynamic analysis.")
+		return errors.New("Not able to perform dynamic analysis : " + err.Error())
 	}
 
 	fmt.Println("Score: ", threatScore)
