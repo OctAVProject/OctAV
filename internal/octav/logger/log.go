@@ -16,7 +16,9 @@ const (
 // TODO : file output, print time only in file
 
 func Debug(msg string) {
-	fmt.Printf("%v[DEBUG] [%v] %v%v\n", DebugColor, getCurrentTime(), msg, ResetColor)
+	if verboseLevel == VERBOSE_DEBUG {
+		fmt.Printf("%v[DEBUG] [%v] %v%v\n", DebugColor, getCurrentTime(), msg, ResetColor)
+	}
 }
 
 func Info(msg string) {

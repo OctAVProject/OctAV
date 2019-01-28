@@ -24,16 +24,16 @@ var (
 )
 
 var namespaces = map[string]string{
-	"packers":       "Packers_index.yar",
+	"packer":        "Packers_index.yar",
 	"malware":       "malware_index.yar",
 	"anti-debug/vm": "Antidebug_AntiVM_index.yar",
 }
 
-type YaraMatcher struct {
+type YaraGrep struct {
 	*yara.Rules
 }
 
-func (yaraMatcher *YaraMatcher) GetAllMatchingRules(exe *analysis.Executable) (yara.MatchRules, error) {
+func (yaraMatcher *YaraGrep) GetAllMatchingRules(exe *analysis.Executable) (yara.MatchRules, error) {
 
 	matches, err := yaraMatcher.ScanMem(exe.Content, 0, 0)
 	if err != nil {
@@ -43,12 +43,12 @@ func (yaraMatcher *YaraMatcher) GetAllMatchingRules(exe *analysis.Executable) (y
 	return matches, nil
 }
 
-func NewYaraMatcher() (*YaraMatcher, error) {
+func NewYaraMatcher() (*YaraGrep, error) {
 
 	var (
 		err               error
 		saveCompiledRules = false
-		yaraMatcher       *YaraMatcher
+		yaraMatcher       *YaraGrep
 	)
 
 	logger.Debug("Initializing the compiler...")
@@ -73,7 +73,7 @@ func NewYaraMatcher() (*YaraMatcher, error) {
 		rules, err = yara.LoadRules(pathToCompiledRules)
 
 		if err == nil {
-			yaraMatcher = &YaraMatcher{rules}
+			yaraMatcher = &YaraGrep{rules}
 
 		} else {
 			logger.Error("Failed to load compiled rules : " + err.Error())
@@ -98,7 +98,7 @@ func NewYaraMatcher() (*YaraMatcher, error) {
 	return yaraMatcher, nil
 }
 
-func buildRules(blacklist ...string) (*YaraMatcher, error) {
+func buildRules(blacklist ...string) (*YaraGrep, error) {
 
 	compiler, err := yara.NewCompiler()
 	if err != nil {
@@ -138,8 +138,8 @@ func buildRules(blacklist ...string) (*YaraMatcher, error) {
 	var rules *yara.Rules
 	rules, err = compiler.GetRules()
 
-	// We convert the Rules struct to our YaraMatcher in order to be able to call custom methods on it
-	return &YaraMatcher{rules}, err
+	// We convert the Rules struct to our YaraGrep in order to be able to call custom methods on it
+	return &YaraGrep{rules}, err
 }
 
 func hashFileMD5(filePath string) (string, error) {

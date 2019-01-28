@@ -2,7 +2,6 @@ package static
 
 import (
 	"bufio"
-	"fmt"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"os"
@@ -32,7 +31,7 @@ func IsHashKnownToBeMalicious(exe *analysis.Executable) (bool, error) {
 	}
 
 	for _, filename := range md5HashesFiles {
-		logger.Debug(fmt.Sprintf("Opening '%v' ...", filename))
+		//logger.Debug(fmt.Sprintf("Opening '%v' ...", filename))
 
 		file, err := os.OpenFile(filename, os.O_RDONLY, os.ModePerm)
 
