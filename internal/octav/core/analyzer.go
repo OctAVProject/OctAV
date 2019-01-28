@@ -5,10 +5,8 @@ import (
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/static"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
-	"github.com/hillu/go-yara"
+	"strings"
 )
-
-var yaraMatcher *static.YaraMatcher
 
 func Analyse(filename string) error {
 
@@ -20,14 +18,6 @@ func Analyse(filename string) error {
 
 	logger.Info("Analysing " + filename)
 	logger.Debug(exe.String())
-
-	if yaraMatcher == nil { // We don't want to rebuild the rules every time we analyse a file
-		if yaraMatcher, err = static.NewYaraMatcher(); err != nil {
-			return err
-		}
-
-		defer yara.Finalize()
-	}
 
 	threatScore, err := staticAnalysis(exe)
 
@@ -100,7 +90,7 @@ func staticAnalysis(exe *analysis.Executable) (uint, error) {
 			score += 50
 		}
 	*/
-	matches, err := yaraMatcher.GetAllMatchingRules(exe)
+	matches, err := yaraGrep.GetAllMatchingRules(exe)
 
 	if err != nil {
 		return 0, err
@@ -110,10 +100,54 @@ func staticAnalysis(exe *analysis.Executable) (uint, error) {
 		logger.Info("No YARA match.")
 	} else {
 		for _, match := range matches {
+
+			// Skip is__elf rule
+			if match.Rule == "is__elf" {
+				continue
+			}
+
 			logger.Info("[" + match.Namespace + "]" + " is matching with " + match.Rule)
 
-			if match.Namespace == "malware" && match.Rule == "suspicious_packer_section" {
-				score += 50
+			switch match.Namespace {
+			case "malware":
+
+				// Add here rules that can't be considered as malware detection
+				if match.Rule == "with_sqlite" {
+					break
+				}
+
+				switch match.Rule {
+				case "suspicious_packer_section":
+					logger.Warning("Suspicious packed binary detected")
+					score += 50
+
+				case "ldpreload":
+					logger.Warning("LD_PRELOAD detected")
+					score += 20
+
+				default:
+					malwareDetected(exe)
+				}
+
+			case "packer":
+				if strings.HasPrefix(match.Rule, "UPX") {
+					logger.Warning("Suspicious packed binary detected")
+					score += 50
+				}
+
+			case "anti-debug/vm":
+				if match.Rule == "vmdetect_misc" {
+					logger.Warning("The binary tries to detect if it's running in a VM")
+					score += 60
+				} else if strings.HasPrefix(match.Rule, "network_") {
+					logger.Warning("The binary uses typical malware communications")
+					score += 20
+				} else {
+					score += 40
+				}
+
+			default:
+				logger.Warning(fmt.Sprintf("Namespace '%v' not supported yet !", match.Namespace))
 			}
 		}
 	}
