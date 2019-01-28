@@ -1,11 +1,13 @@
 package core
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/static"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
+	"os"
 	"strings"
 )
 
@@ -162,6 +164,28 @@ func dynamicAnalysis(exe *analysis.Executable) (uint, error) {
 }
 
 func malwareDetected(exe *analysis.Executable) {
-	logger.Warning("Malware detected")
-	//TODO : ask the user what to do
+	var (
+		err    error
+		choice string
+	)
+
+	logger.Danger(exe.Filename + " is a malware")
+	reader := bufio.NewReader(os.Stdin)
+
+	for choice != "yes" && choice != "no" {
+		fmt.Print("Do you want to delete this file ? [yes/no] ")
+		choice, err = reader.ReadString('\n')
+
+		if err != nil {
+			logger.Fatal(err.Error())
+		}
+
+		choice = strings.ToLower(choice[:len(choice)-1])
+	}
+
+	if choice == "yes" {
+		logger.Info("Deleting malware...")
+	} else {
+		logger.Info("Ignoring...")
+	}
 }

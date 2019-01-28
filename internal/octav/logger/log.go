@@ -45,6 +45,14 @@ func Error(msg string) {
 	}
 }
 
+func Danger(msg string) {
+	if verboseLevel == VERBOSE_DEBUG {
+		fmt.Printf("%v[DANGER] [%v] %v%v\n", ErrorColor, getCurrentTime(), msg, ResetColor)
+	} else {
+		fmt.Printf("%v[DANGER] %v%v\n", ErrorColor, msg, ResetColor)
+	}
+}
+
 func Fatal(msg string) {
 	panic(fmt.Sprintf("%v[FATAL] [%v] %v%v", ErrorColor, getCurrentTime(), msg, ResetColor))
 }
