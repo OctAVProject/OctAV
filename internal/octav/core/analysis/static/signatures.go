@@ -12,15 +12,9 @@ import (
 func IsHashKnownToBeMalicious(exe *analysis.Executable) (bool, error) {
 	logger.Info("Comparing MD5 hash signatures...")
 
-	databaseDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-
-	if err != nil {
-		logger.Fatal(err.Error())
-	}
-
 	var md5HashesFiles []string
 
-	err = filepath.Walk(databaseDir+"/files/md5_hashes/", func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk("files/md5_hashes/", func(path string, info os.FileInfo, err error) error {
 
 		if err != nil {
 			return err

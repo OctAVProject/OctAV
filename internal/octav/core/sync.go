@@ -3,20 +3,12 @@ package core
 import (
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"gopkg.in/src-d/go-git.v4"
-	"os"
-	"path/filepath"
 )
 
 func SyncDatabase() error {
 	logger.Info("Start syncing database...")
 
-	databaseDir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-
-	if err != nil {
-		logger.Fatal(err.Error())
-	}
-
-	repoPath := databaseDir + "/files"
+	repoPath := "files"
 
 	currentDatabase, err := git.PlainClone(repoPath, false, &git.CloneOptions{
 		URL:      "https://github.com/OctAVProject/OctAV-Files",
