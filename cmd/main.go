@@ -60,6 +60,10 @@ func main() {
 		core.SyncDatabase()
 	}
 
+	if err = core.Initialize(); err != nil {
+		logger.Fatal("Can't initialize the core : " + err.Error())
+	}
+
 	if commandLine.Fastscan {
 		scan.FastScan()
 	} else if commandLine.Fullscan {
@@ -74,5 +78,9 @@ func main() {
 
 	if commandLine.Configscan {
 		scan.FullConfigScan()
+	}
+
+	if err = core.Stop(); err != nil {
+		logger.Fatal("Can't stop the core properly : " + err.Error())
 	}
 }
