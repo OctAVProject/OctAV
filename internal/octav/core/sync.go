@@ -16,7 +16,6 @@ func SyncDatabase() error {
 	})
 
 	if err == git.ErrRepositoryAlreadyExists {
-		logger.Debug("Pulling latest changes from repository...")
 		currentDatabase, err = git.PlainOpen(repoPath)
 
 		if err != nil {
@@ -33,6 +32,7 @@ func SyncDatabase() error {
 			return err
 		}
 
+		logger.Debug("Pulling latest changes from repository...")
 		err = workTree.Pull(&git.PullOptions{RemoteName: "origin", Force: true})
 
 		if err == git.NoErrAlreadyUpToDate {

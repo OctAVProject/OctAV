@@ -149,7 +149,6 @@ func hashFileMD5(filePath string) (string, error) {
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		fmt.Println("ok")
 		return "", err
 	}
 
