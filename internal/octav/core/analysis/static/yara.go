@@ -20,13 +20,15 @@ var (
 	yaraPath            = "files/yara/"
 	pathToRulesIndex    = yaraPath + "index.yar" // TODO : remove
 	idFile              = "MD5_index.id"
-	pathToCompiledRules = "rulesSet.lst"
+	pathToCompiledRules = "compiled.rules"
 )
 
 var namespaces = map[string]string{
 	"packer":        "Packers_index.yar",
 	"malware":       "malware_index.yar",
 	"anti-debug/vm": "Antidebug_AntiVM_index.yar",
+	"cve":           "CVE_Rules_index.yar",
+	"exploit-kits":  "Exploit-Kits_index.yar",
 }
 
 type YaraGrep struct {
@@ -46,26 +48,24 @@ func (yaraMatcher *YaraGrep) GetAllMatchingRules(exe *analysis.Executable) (yara
 func NewYaraMatcher() (*YaraGrep, error) {
 
 	var (
-		err               error
-		saveCompiledRules = false
-		yaraMatcher       *YaraGrep
+		err              error
+		rulesHaveChanged = false
+		yaraGrep         *YaraGrep
 	)
 
 	logger.Debug("Initializing the compiler...")
 
-	if updated, errCheckUpdate := haveYaraBeenUpdated(); errCheckUpdate != nil {
-		return nil, errCheckUpdate
+	if rulesHaveChanged, err = haveYaraBeenUpdated(); err != nil {
+		return nil, err
 
-	} else if updated {
+	} else if rulesHaveChanged {
 
 		logger.Debug("Updating the compiled rules...")
 
-		if yaraMatcher, err = buildRules(); err != nil {
+		if yaraGrep, err = buildRules(); err != nil {
 			// TODO : load existing rules anyway ?
 			return nil, err
 		}
-
-		saveCompiledRules = true
 
 	} else {
 
@@ -73,32 +73,32 @@ func NewYaraMatcher() (*YaraGrep, error) {
 		rules, err = yara.LoadRules(pathToCompiledRules)
 
 		if err == nil {
-			yaraMatcher = &YaraGrep{rules}
+			yaraGrep = &YaraGrep{rules}
 
 		} else {
 			logger.Error("Failed to load compiled rules : " + err.Error())
 			logger.Debug("Creating new compiled rules...")
 
-			if yaraMatcher, err = buildRules(); err != nil {
+			if yaraGrep, err = buildRules(); err != nil {
 				return nil, err
 			}
 
-			saveCompiledRules = true
+			rulesHaveChanged = true
 		}
 	}
 
-	if saveCompiledRules {
-		if err = yaraMatcher.Save(pathToCompiledRules); err != nil {
+	if rulesHaveChanged {
+		if err = yaraGrep.Save(pathToCompiledRules); err != nil {
 			logger.Error("Failed to save the rules set : " + err.Error())
 			return nil, err
 		}
 	}
 
-	logger.Info(fmt.Sprintf("%v yara rules loaded", len(yaraMatcher.GetRules())))
-	return yaraMatcher, nil
+	logger.Info(fmt.Sprintf("%v yara rules loaded", len(yaraGrep.GetRules())))
+	return yaraGrep, nil
 }
 
-func buildRules(blacklist ...string) (*YaraGrep, error) {
+func buildRules(blacklistedStatements ...string) (*YaraGrep, error) {
 
 	compiler, err := yara.NewCompiler()
 	if err != nil {
@@ -115,7 +115,7 @@ func buildRules(blacklist ...string) (*YaraGrep, error) {
 
 			statementIsBlacklisted := false
 
-			for _, blacklistedStatement := range blacklist {
+			for _, blacklistedStatement := range blacklistedStatements {
 				if includeStatment == blacklistedStatement {
 					statementIsBlacklisted = true
 					break
@@ -130,7 +130,7 @@ func buildRules(blacklist ...string) (*YaraGrep, error) {
 			if err := compiler.AddString(includeStatment, namespace); err != nil {
 				logger.Warning(fmt.Sprintf("Failed to load a rule in %v : %v", includeStatment, err.Error()))
 				logger.Info("Recreating a new compiler ignoring that statement...")
-				return buildRules(append(blacklist, includeStatment)...)
+				return buildRules(append(blacklistedStatements, includeStatment)...)
 			}
 		}
 	}
