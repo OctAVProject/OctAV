@@ -5,55 +5,142 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"github.com/OctAVProject/OctAV/internal/octav/core/analysis"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"github.com/hillu/go-yara"
 	"io"
 	"io/ioutil"
 	"os"
 	"regexp"
+	"strings"
 )
-
-/*
-	How to make this stuff work ?
-	=============================
-
-	1. Install yara on your machine
-	2. go get github.com/hillu/go-yara
-	3. go install github.com/hillu/go-yara
-	4. If it's not already the case, create a folder dedicated to the "dependency files"
-	4. Clone the yara rules repo in this folder : git clone https://github.com/Yara-Rules/rules
-	5. Patch the index_gen.sh script (ask for the patch) :
-		- patch path/of/yararules/repo/index_gen.sh path/to/the/patch/index_gen.patch
-	5. Launch the index_gen.sh script (/!\ from the yara repo)
-	6. Adapt the below vars
-
-	How to use it ?
-	===============
-
-		var pathToFile = "/path/to/file"
-
-		scanner, err := CreateYaraScanner()
-		if err != nil{
-			logger.Error("Error occurs when setting up the compiler.")
-			logger.Info("Aborting the analysis")
-		}else{
-			matches, err := Yaranalysis(pathToFile, scanner)
-			if err != nil{
-				logger.Error("[ERROR] Error occurs when processing analysis on %s", pathToFile)
-				logger.Info("Skipping %s", pathToFile)
-			}else{
-				PrintMatches(matches)
-			}
-		}
-
-*/
 
 var (
 	// stuff that could be put in a config file
-	pathToRulesIndex    = "/path/to/the/folder/yararepo/index.yar"
-	idFile              = "/path/to/the/folder/MD5_index.id"
-	pathToCompiledRules = "/path/to/the/folder/rulesSet.lst"
+	yaraPath            = "files/yara/"
+	pathToRulesIndex    = yaraPath + "index.yar" // TODO : remove
+	idFile              = "MD5_index.id"
+	pathToCompiledRules = "rulesSet.lst"
 )
+
+var namespaces = map[string]string{
+	"packers":       "Packers_index.yar",
+	"malware":       "malware_index.yar",
+	"anti-debug/vm": "Antidebug_AntiVM_index.yar",
+}
+
+type YaraMatcher struct {
+	*yara.Rules
+}
+
+func (yaraMatcher *YaraMatcher) GetAllMatchingRules(exe *analysis.Executable) (yara.MatchRules, error) {
+
+	matches, err := yaraMatcher.ScanMem(exe.Content, 0, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	return matches, nil
+}
+
+func NewYaraMatcher() (*YaraMatcher, error) {
+
+	var (
+		err               error
+		saveCompiledRules = false
+		yaraMatcher       *YaraMatcher
+	)
+
+	logger.Debug("Initializing the compiler...")
+
+	if updated, errCheckUpdate := haveYaraBeenUpdated(); errCheckUpdate != nil {
+		return nil, errCheckUpdate
+
+	} else if updated {
+
+		logger.Debug("Updating the compiled rules...")
+
+		if yaraMatcher, err = buildRules(); err != nil {
+			// TODO : load existing rules anyway ?
+			return nil, err
+		}
+
+		saveCompiledRules = true
+
+	} else {
+
+		var rules *yara.Rules
+		rules, err = yara.LoadRules(pathToCompiledRules)
+
+		if err == nil {
+			yaraMatcher = &YaraMatcher{rules}
+
+		} else {
+			logger.Error("Failed to load compiled rules : " + err.Error())
+			logger.Debug("Creating new compiled rules...")
+
+			if yaraMatcher, err = buildRules(); err != nil {
+				return nil, err
+			}
+
+			saveCompiledRules = true
+		}
+	}
+
+	if saveCompiledRules {
+		if err = yaraMatcher.Save(pathToCompiledRules); err != nil {
+			logger.Error("Failed to save the rules set : " + err.Error())
+			return nil, err
+		}
+	}
+
+	logger.Info(fmt.Sprintf("%v yara rules loaded", len(yaraMatcher.GetRules())))
+	return yaraMatcher, nil
+}
+
+func buildRules(blacklist ...string) (*YaraMatcher, error) {
+
+	compiler, err := yara.NewCompiler()
+	if err != nil {
+		logger.Error("Failed to initialize YARA compiler : " + err.Error())
+		return nil, err
+	}
+
+	defer compiler.Destroy()
+
+	for namespace, filename := range namespaces {
+		stringRules := parseIncludeFile(yaraPath + filename)
+
+		for _, includeStatment := range stringRules {
+
+			statementIsBlacklisted := false
+
+			for _, blacklistedStatement := range blacklist {
+				if includeStatment == blacklistedStatement {
+					statementIsBlacklisted = true
+					break
+				}
+			}
+
+			if statementIsBlacklisted {
+				logger.Debug("Skipping blacklisted statement : " + includeStatment)
+				continue
+			}
+
+			if err := compiler.AddString(includeStatment, namespace); err != nil {
+				logger.Warning(fmt.Sprintf("Failed to load a rule in %v : %v", includeStatment, err.Error()))
+				logger.Info("Recreating a new compiler ignoring that statement...")
+				return buildRules(append(blacklist, includeStatment)...)
+			}
+		}
+	}
+
+	var rules *yara.Rules
+	rules, err = compiler.GetRules()
+
+	// We convert the Rules struct to our YaraMatcher in order to be able to call custom methods on it
+	return &YaraMatcher{rules}, err
+}
 
 func hashFileMD5(filePath string) (string, error) {
 	//function that could be put elsewhere
@@ -101,6 +188,7 @@ func createIDFile(pathToIdFile string, md5 string) error {
 	return nil
 }
 
+// TODO : use repo's HEAD instead ?
 func haveYaraBeenUpdated() (bool, error) {
 
 	var (
@@ -112,7 +200,7 @@ func haveYaraBeenUpdated() (bool, error) {
 	currentIndexMD5String, _ := hashFileMD5(pathToRulesIndex)
 
 	if _, err := os.Stat(idFile); err == nil {
-		logger.Info("Checking if rules have been updated. ")
+		logger.Debug("Checking if rules have been updated. ")
 
 		file, err := os.Open(idFile)
 		if err != nil {
@@ -142,10 +230,10 @@ func haveYaraBeenUpdated() (bool, error) {
 		}
 
 		if currentIndexMD5String == storedIndexMD5String {
-			logger.Info("Rules have not been updated. ")
+			logger.Info("YARA rules have not been updated. ")
 			res = false
 		} else {
-			logger.Info("Rules have been updated. ")
+			logger.Info("YARA rules have been updated. ")
 			err = createIDFile(idFile, currentIndexMD5String)
 			if err != nil {
 				return false, deferr
@@ -169,216 +257,27 @@ func haveYaraBeenUpdated() (bool, error) {
 }
 
 func parseIncludeFile(path string) []string {
-	var res []string
+	var includeStatements []string
 
 	file, err := os.Open(path)
 	if err != nil {
 		logger.Error("Error occurred when opening the index rule file : " + err.Error())
-
 		return nil
 	}
 
-	var deferr error
-	defer func() {
-		if err := file.Close(); err != nil {
-			deferr = err
-		}
-	}()
-	if deferr != nil {
-		return nil
-	}
-
+	defer file.Close() // No need to handle error, file in read only
 	scanner := bufio.NewScanner(file)
 
-	var validLine = regexp.MustCompile(`^include "`) //todo : enhance the regexp
+	var validLine = regexp.MustCompile(`^include ".*"`)
+	yaraIncludePatcher := strings.NewReplacer("./", yaraPath)
 
 	for scanner.Scan() {
 		line := scanner.Text()
 		if validLine.MatchString(line) {
-			res = append(res, line)
+			line = yaraIncludePatcher.Replace(line)
+			includeStatements = append(includeStatements, line)
 		}
 	}
 
-	return res
-}
-
-func createTheCompiler() (*yara.Compiler, error) {
-
-	validatedCompiler, err := yara.NewCompiler()
-	if err != nil {
-		logger.Error("Failed to initialize YARA compiler : " + err.Error())
-
-		return nil, err
-	}
-
-	priorCompiler, priorErr := yara.NewCompiler()
-	if priorErr != nil {
-		logger.Error("Failed to initialize YARA prior compiler : " + err.Error())
-
-		return nil, priorErr
-	}
-
-	stringRules := parseIncludeFile(pathToRulesIndex) // allows us to avoid a general error and to debug file by file
-
-	logger.Info(string(len(stringRules)) + " files to load !")
-
-	for _, includeStatment := range stringRules {
-
-		priorErr = priorCompiler.AddString(includeStatment, ".")
-
-		if priorErr == nil {
-			err = validatedCompiler.AddString(includeStatment, ".")
-			if err != nil {
-				logger.Error("cf. comments --> " + err.Error()) // we need to find a solution for priorCompiler to have the rules in validatedCompiler to avoid this case
-
-				return nil, err
-			}
-
-		} else {
-			logger.Warning("Failded to load a rule in " + includeStatment + " : " + err.Error())
-
-			priorCompiler, priorErr = yara.NewCompiler()
-			if priorErr != nil {
-				logger.Error("Failed to re-initialize YARA callback compiler :" + priorErr.Error())
-
-				return nil, priorErr
-			}
-
-			//todo : put priorCompiler in validatedCompiler --> copy of pointer content to avoid duplicate
-
-		}
-	}
-
-	/* // todo : if we find a solution to copy the content of the compiler, the following algorithm would be better
-	validatedCompiler, err := yara.NewCompiler()
-	if err != nil {
-		log.Printf("[ERROR] Failed to initialize YARA compiler: %s", err)
-		return nil, err
-	}
-
-	bufferCompiler := validatedCompiler // replace by the copy function
-
-
-	stringRules := parseIncludeFile(pathToRulesIndex)
-
-	for _, includeStatment := range stringRules {
-
-		err = validatedCompiler.AddString(includeStatment, ".")
-		if err != nil {
-			//log.Printf("Failded to load a rule : %s ", err)
-			validatedCompiler = bufferCompiler // replace by the copy function
-		}else{
-			//log.Println("OK")
-			bufferCompiler = validatedCompiler // replace by the copy function
-		}
-	}*/
-
-	return validatedCompiler, nil
-}
-
-func CreateYaraScanner() (*yara.Rules, error) {
-	// todo : probably a few more cases to manage
-	var (
-		r                *yara.Rules
-		err              error
-		c                *yara.Compiler
-		thereIsACompiler = false
-	)
-
-	logger.Info("Initiating the compiler.")
-
-	if updated, errCheckUpdate := haveYaraBeenUpdated(); updated && errCheckUpdate == nil {
-
-		logger.Info("Creating the updated compiler.")
-
-		c, err = createTheCompiler()
-		if err != nil {
-			return nil, err
-		}
-
-		logger.Info("Extracting the compiled rules.")
-
-		r, err = c.GetRules()
-		if err != nil {
-			logger.Error("Failed to compile rules : " + err.Error())
-
-			return nil, err
-		}
-
-	} else if !updated && errCheckUpdate == nil {
-		var compilerFile = pathToCompiledRules
-
-		logger.Info("Checking if a compiler exists.")
-		if _, err := os.Stat(compilerFile); err == nil {
-			logger.Info("Found a compiler.")
-			logger.Info("Loading the compiler.")
-
-			r, err = yara.LoadRules(compilerFile)
-			if err != nil {
-				logger.Error("Failed to load compiled rules : " + err.Error())
-
-				return nil, err
-
-			} else {
-				thereIsACompiler = true
-			}
-
-		} else {
-			logger.Info("Can't find a compiler")
-			logger.Info("Creating the compiler.")
-
-			c, err = createTheCompiler()
-			if err != nil {
-				return nil, err
-			}
-
-			logger.Info("Extracting the compiled rules.")
-			r, err = c.GetRules()
-			if err != nil {
-				logger.Error("Failed to compile rules : " + err.Error())
-
-				return nil, err
-			}
-		}
-	} else {
-		return nil, errCheckUpdate
-	}
-
-	if !thereIsACompiler {
-		err = r.Save(pathToCompiledRules)
-		if err != nil {
-			logger.Error("Failed to save the rules set : " + err.Error())
-
-			return nil, err
-		}
-	}
-
-	return r, nil
-}
-
-func PrintMatches(m []yara.MatchRule) {
-	if len(m) <= 0 {
-		logger.Info("No matches.")
-	} else {
-		for _, match := range m {
-			logger.Info("[" + match.Namespace + "]" + " is matching with " + match.Rule)
-		}
-	}
-}
-
-func Yaranalysis(pathToFile string, yaraScanner *yara.Rules) (yara.MatchRules, error) {
-
-	logger.Info("Scanning file %s " + pathToFile)
-	m, err := yaraScanner.ScanFile(pathToFile, 0, 0)
-	if err != nil {
-		logger.Error("Failed to scan file(s) :" + err.Error())
-		return nil, err
-	}
-
-	err = yara.Finalize()
-	if err != nil {
-		return nil, err
-	}
-
-	return m, nil
+	return includeStatements
 }

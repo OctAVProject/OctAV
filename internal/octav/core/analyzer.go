@@ -5,7 +5,10 @@ import (
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/static"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
+	"github.com/hillu/go-yara"
 )
+
+var yaraMatcher *static.YaraMatcher
 
 func Analyse(filename string) error {
 
@@ -17,6 +20,14 @@ func Analyse(filename string) error {
 
 	logger.Info("Analysing " + filename)
 	logger.Debug(exe.String())
+
+	if yaraMatcher == nil { // We don't want to rebuild the rules every time we analyse a file
+		if yaraMatcher, err = static.NewYaraMatcher(); err != nil {
+			return err
+		}
+
+		defer yara.Finalize()
+	}
 
 	threatScore, err := staticAnalysis(exe)
 
@@ -39,7 +50,8 @@ func Analyse(filename string) error {
 }
 
 func staticAnalysis(exe *analysis.Executable) (uint, error) {
-	fmt.Println("_____STATIC__ANALYSIS_____")
+	fmt.Println("\n_____STATIC__ANALYSIS_____")
+
 	hashIsKnown, err := static.IsHashKnownToBeMalicious(exe)
 
 	if err != nil {
@@ -61,30 +73,49 @@ func staticAnalysis(exe *analysis.Executable) (uint, error) {
 	if hashIsKnown {
 		malwareDetected(exe)
 	}
-
-	ssDeepIsKnown, err := static.IsSSDeepHashKnownToBeMalicious(exe)
-
-	if err != nil {
-		logger.Error(err.Error())
-		logger.Debug("Trying to fix the error by syncing the database.")
-		err = SyncDatabase()
+	/*
+		ssDeepIsKnown, err := static.IsSSDeepHashKnownToBeMalicious(exe)
 
 		if err != nil {
-			return 0, err
+			logger.Error(err.Error())
+			logger.Debug("Trying to fix the error by syncing the database.")
+			err = SyncDatabase()
+
+			if err != nil {
+				return 0, err
+			}
+
+			hashIsKnown, err = static.IsHashKnownToBeMalicious(exe)
+
+			if err != nil {
+				return 0, err
+			}
 		}
-
-		hashIsKnown, err = static.IsHashKnownToBeMalicious(exe)
-
-		if err != nil {
-			return 0, err
-		}
-	}
-
+	*/
 	var score uint = 0
 
-	if ssDeepIsKnown {
-		logger.Warning("SSDeep hash is known, potential malware ! Running further analysis...")
-		score += 50
+	/*
+		if ssDeepIsKnown {
+			logger.Warning("SSDeep hash is known, potential malware ! Running further analysis...")
+			score += 50
+		}
+	*/
+	matches, err := yaraMatcher.GetAllMatchingRules(exe)
+
+	if err != nil {
+		return 0, err
+	}
+
+	if len(matches) <= 0 {
+		logger.Info("No YARA match.")
+	} else {
+		for _, match := range matches {
+			logger.Info("[" + match.Namespace + "]" + " is matching with " + match.Rule)
+
+			if match.Namespace == "malware" && match.Rule == "suspicious_packer_section" {
+				score += 50
+			}
+		}
 	}
 
 	return score, nil
