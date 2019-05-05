@@ -31,19 +31,27 @@ func Analyse(filename string) error {
 	fmt.Println("Score: ", threatScore)
 
 	// TODO : If static analysis is sure the binary is a threat, skip dynamic analysis
+	/*
+		threatScore, err = dynamicAnalysis(exe)
 
-	threatScore, err = dynamicAnalysis(exe)
+		if err != nil {
+			return errors.New("Not able to perform dynamic analysis : " + err.Error())
+		}
 
-	if err != nil {
-		return errors.New("Not able to perform dynamic analysis : " + err.Error())
+		fmt.Println("Score: ", threatScore)
+	*/
+
+	if threatScore >= 100 {
+		logger.Danger("Threat score >= 100")
+		malwareDetected(exe)
 	}
 
-	fmt.Println("Score: ", threatScore)
 	return nil
 }
 
 func staticAnalysis(exe *analysis.Executable) (uint, error) {
 	fmt.Println("\n_____STATIC__ANALYSIS_____")
+	var score uint = 0
 
 	hashIsKnown, err := static.IsHashKnownToBeMalicious(exe)
 
@@ -65,34 +73,50 @@ func staticAnalysis(exe *analysis.Executable) (uint, error) {
 
 	if hashIsKnown {
 		malwareDetected(exe)
+		return 100, nil
 	}
-	/*
-		ssDeepIsKnown, err := static.IsSSDeepHashKnownToBeMalicious(exe)
+
+	logger.Info("Looking for IPs and domains known to be malicious")
+	var maliciousIPorDomainFound bool
+
+	if maliciousIPorDomainFound, err = static.MaliciousDomainFound(exe.Content); err != nil {
+		return 0, err
+	} else if maliciousIPorDomainFound {
+		score += 70
+	} else {
+
+		if maliciousIPorDomainFound, err = static.MaliciousIPFound(exe.Content); err != nil {
+			return 0, err
+		} else if maliciousIPorDomainFound {
+			score += 70
+		}
+	}
+
+	ssDeepDistance, err := static.GetHighestSSDeepDistance(exe)
+
+	if err != nil {
+		logger.Error(err.Error())
+		logger.Debug("Trying to fix the error by syncing the database.")
+		err = SyncDatabase()
 
 		if err != nil {
-			logger.Error(err.Error())
-			logger.Debug("Trying to fix the error by syncing the database.")
-			err = SyncDatabase()
-
-			if err != nil {
-				return 0, err
-			}
-
-			hashIsKnown, err = static.IsHashKnownToBeMalicious(exe)
-
-			if err != nil {
-				return 0, err
-			}
+			return 0, err
 		}
-	*/
-	var score uint = 0
 
-	/*
-		if ssDeepIsKnown {
-			logger.Warning("SSDeep hash is known, potential malware ! Running further analysis...")
-			score += 50
+		ssDeepDistance, err = static.GetHighestSSDeepDistance(exe)
+
+		if err != nil {
+			return 0, err
 		}
-	*/
+	}
+
+	if ssDeepDistance > 80 {
+		logger.Danger(fmt.Sprintf("SSDeep distance is higher than 80 (%v), considered a malware.", ssDeepDistance))
+		malwareDetected(exe)
+		return 0, nil
+	}
+
+	logger.Info("Looking for matching YARA rules")
 	matches, err := yaraGrep.GetAllMatchingRules(exe)
 
 	if err != nil {
@@ -130,6 +154,7 @@ func staticAnalysis(exe *analysis.Executable) (uint, error) {
 
 				default:
 					malwareDetected(exe)
+					return 0, nil
 				}
 
 			case "packer":

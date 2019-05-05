@@ -6,7 +6,13 @@ import (
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"os"
 	"path/filepath"
+	"unsafe"
 )
+
+// #cgo LDFLAGS: -lfuzzy
+// #include <fuzzy.h>
+// #include <stdlib.h>
+import "C"
 
 func IsHashKnownToBeMalicious(exe *analysis.Executable) (bool, error) {
 	logger.Info("Comparing MD5 hash signatures...")
@@ -57,31 +63,42 @@ func IsHashKnownToBeMalicious(exe *analysis.Executable) (bool, error) {
 	return false, nil
 }
 
-func IsSSDeepHashKnownToBeMalicious(exe *analysis.Executable) (bool, error) {
+func GetHighestSSDeepDistance(exe *analysis.Executable) (int, error) {
 	logger.Info("Comparing SSDeep hash signatures...")
 
-	filename := "files/hashes.ssdeep"
+	if len(exe.Content) < 4096 {
+		logger.Warning("File is too small to use SSDeep")
+		return 0, nil
+	}
+
+	filename := "files/ssdeep_hashes/ssdeep.txt"
 
 	file, err := os.OpenFile(filename, os.O_RDONLY, os.ModePerm)
 
 	if err != nil {
-		return false, err
+		return 0, err
 	}
 
 	defer file.Close()
 
+	cSSDeep := C.CString(exe.SSDeep)
+
+	defer func() {
+		C.free(unsafe.Pointer(cSSDeep))
+	}()
+
 	scanner := bufio.NewScanner(file)
+	highestSSDeepDistance := 0
 
 	for scanner.Scan() {
-		// TODO : compute distance instead of strict equality
-		if scanner.Text() == exe.SSDeep {
-			return true, nil
+		cCurrentSSDeep := C.CString(scanner.Text())
+
+		distance := int(C.fuzzy_compare(cCurrentSSDeep, cSSDeep))
+
+		if highestSSDeepDistance < distance {
+			highestSSDeepDistance = distance
 		}
 	}
 
-	// Check local database hash existence
-	// If the database hasn't been built yet, suggest the user to do so
-
-	//Select in signature table a row with exe.MD5 hash
-	return false, scanner.Err()
+	return highestSSDeepDistance, scanner.Err()
 }
