@@ -1,6 +1,5 @@
 package analysis
 
-import "C"
 import (
 	"crypto/md5"
 	"crypto/sha1"

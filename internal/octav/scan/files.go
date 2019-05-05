@@ -2,9 +2,10 @@ package scan
 
 import (
 	"fmt"
+	"github.com/OctAVProject/OctAV/internal/octav/core"
+	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"os"
 	"path/filepath"
-	"github.com/OctAVProject/OctAV/internal/octav/core"
 )
 
 func FullScan() {
@@ -17,11 +18,11 @@ func FastScan() {
 
 	directoriesToScan := []string{
 		//"/home",
-		"/tmp",
+		"/tmp/malwares",
 		//"/opt",
 	}
 
-	fmt.Println("Fast scan starting...")
+	logger.Info("Fast scan starting...")
 
 	for _, directory := range directoriesToScan {
 		scanDirectory(directory)
@@ -39,7 +40,7 @@ func scanDirectory(directory string) {
 		// Analysing files
 		if !f.IsDir() {
 			//TODO : use goroutines here, but be careful not to start 100k analysis at the same time !
-			core.Analyse(path) // We don't care about errors in a multiple files scan
+			_ = core.Analyse(path) // We don't care about errors in a multiple files scan
 		}
 
 		return err
