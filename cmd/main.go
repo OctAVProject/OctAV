@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/OctAVProject/OctAV/internal/octav/core"
+	"github.com/OctAVProject/OctAV/internal/octav/core/daemon"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"github.com/OctAVProject/OctAV/internal/octav/scan"
 	"github.com/jessevdk/go-flags"
@@ -16,6 +17,7 @@ type positionalArgs struct {
 
 var commandLine struct {
 	Verbose        string         `short:"l" long:"log-level" description:"Log level" choice:"DEBUG" choice:"INFO" choice:"WARNING" default:"INFO"`
+	Daemon         bool           `short:"d" long:"daemon" description:"Put OctAV in an endless loop, watching for events on the computer"`
 	Fastscan       bool           `short:"s" long:"fast-scan" description:"Full scan of the system, really time consuming"`
 	Fullscan       bool           `long:"full-scan" description:"Smart scan, looking in most probable places"`
 	Configscan     bool           `long:"config-scan" description:"Look at config files for security issues"`
@@ -32,8 +34,15 @@ func main() {
 	// Exclude program name from parsing with [1:]
 	remainingArgs, err := flags.ParseArgs(&commandLine, os.Args[1:])
 
-	if err != nil {
-		logger.Fatal(err.Error())
+	if flagsErr, ok := err.(*flags.Error); ok && flagsErr.Type == flags.ErrHelp {
+		return
+	}
+
+	if commandLine.Daemon {
+		if err = daemon.Manage("start"); err != nil {
+			logger.Error(err.Error())
+		}
+		return
 	}
 
 	fileToScan := commandLine.PositionalArgs.File
