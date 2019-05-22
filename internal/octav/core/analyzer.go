@@ -74,7 +74,7 @@ func Analyse(filename string) error {
 }
 
 func staticAnalysis(exe *analysis.Executable) (uint, error) {
-	fmt.Println("\n_____STATIC__ANALYSIS_____")
+	logger.Header("static analysis")
 	var score uint = 0
 
 	hashIsKnown, err := static.IsHashKnownToBeMalicious(exe)
@@ -207,7 +207,7 @@ func staticAnalysis(exe *analysis.Executable) (uint, error) {
 
 func dynamicAnalysis(exe *analysis.Executable) (uint, error) {
 
-	fmt.Println("\n_____DYNAMIC_ANALYSIS_____")
+	logger.Header("dynamic analysis")
 
 	var requestBody bytes.Buffer
 
@@ -305,6 +305,10 @@ func dynamicAnalysis(exe *analysis.Executable) (uint, error) {
 	}
 
 	resp.Body.Close()
+
+	if jsonResponse["behavior"] == nil {
+		return 0, errors.New("no behavior analysis in the report")
+	}
 
 	behavior := jsonResponse["behavior"].(map[string]interface{})
 	processes := behavior["processes"].([]interface{})

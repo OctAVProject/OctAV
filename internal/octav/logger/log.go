@@ -2,10 +2,12 @@ package logger
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
 const (
+	HeaderColor  = "\u001b[45;1m"
 	InfoColor    = "\033[1;34m"
 	WarningColor = "\033[1;33m"
 	ErrorColor   = "\033[1;31m"
@@ -13,27 +15,29 @@ const (
 	ResetColor   = "\033[0m"
 )
 
-// TODO : file output, print time only in file
-
 func Debug(msg string) {
 	if verboseLevel == VERBOSE_DEBUG {
-		fmt.Printf("%v[DEBUG] [%v] %v%v\n", DebugColor, getCurrentTime(), msg, ResetColor)
+		fmt.Printf("%v[DEBUG]%v [%v] %v\n", DebugColor, getCurrentTime(), ResetColor, msg)
 	}
 }
 
 func Info(msg string) {
 	if verboseLevel == VERBOSE_DEBUG {
-		fmt.Printf("%v[INFO] [%v] %v%v\n", InfoColor, getCurrentTime(), msg, ResetColor)
+		fmt.Printf("%v[INFO]%v [%v] %v\n", InfoColor, getCurrentTime(), ResetColor, msg)
 	} else if verboseLevel >= VERBOSE_INFO {
-		fmt.Printf("%v[INFO] %v%v\n", InfoColor, msg, ResetColor)
+		fmt.Printf("%v[INFO]%v %v\n", InfoColor, ResetColor, msg)
 	}
+}
+
+func Header(title string) {
+	fmt.Printf("\n%v[  %v  ]%v\n", HeaderColor, strings.ToUpper(title), ResetColor)
 }
 
 func Warning(msg string) {
 	if verboseLevel == VERBOSE_DEBUG {
-		fmt.Printf("%v[WARNING] [%v] %v%v\n", WarningColor, getCurrentTime(), msg, ResetColor)
+		fmt.Printf("%v[WARN]%v [%v] %v\n", WarningColor, getCurrentTime(), ResetColor, msg)
 	} else if verboseLevel >= VERBOSE_WARNING {
-		fmt.Printf("%v[WARNING] %v%v\n", WarningColor, msg, ResetColor)
+		fmt.Printf("%v[WARN]%v %v\n", WarningColor, ResetColor, msg)
 	}
 }
 
