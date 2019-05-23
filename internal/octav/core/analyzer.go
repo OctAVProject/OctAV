@@ -10,6 +10,7 @@ import (
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/dynamic"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/static"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
+	"github.com/gen2brain/beeep"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -38,10 +39,9 @@ func Analyse(filename string) error {
 	elapsed := time.Now().Sub(start)
 	logger.Info(fmt.Sprintf("Static Analysis done in %v", elapsed))
 
-	fmt.Println("Static score: ", staticThreatScore)
+	logger.Info(fmt.Sprintf("Static score: %v", staticThreatScore))
 
 	if staticThreatScore >= 100 {
-		logger.Danger("Threat score >= 100")
 		malwareDetected(exe)
 		return nil
 	}
@@ -56,16 +56,14 @@ func Analyse(filename string) error {
 	elapsed = time.Now().Sub(start)
 	logger.Info(fmt.Sprintf("Dynamic Analysis done in %v", elapsed))
 
-	fmt.Println("Dynamic score: ", dynamicThreatScore)
+	logger.Info(fmt.Sprintf("Dynamic score: %v", dynamicThreatScore))
 
 	if dynamicThreatScore >= 100 {
-		logger.Danger("Threat score >= 100")
 		malwareDetected(exe)
 		return nil
 	}
 
 	if staticThreatScore+dynamicThreatScore >= 170 {
-		logger.Danger("Additional score >= 170")
 		malwareDetected(exe)
 		return nil
 	}
@@ -75,6 +73,7 @@ func Analyse(filename string) error {
 
 func staticAnalysis(exe *analysis.Executable) (uint, error) {
 	logger.Header("static analysis")
+
 	var score uint = 0
 
 	hashIsKnown, err := static.IsHashKnownToBeMalicious(exe)
@@ -208,6 +207,7 @@ func staticAnalysis(exe *analysis.Executable) (uint, error) {
 func dynamicAnalysis(exe *analysis.Executable) (uint, error) {
 
 	logger.Header("dynamic analysis")
+	logger.Info("Analysing binary in a sandboxed environment, this might take some time...")
 
 	var requestBody bytes.Buffer
 
@@ -313,23 +313,34 @@ func dynamicAnalysis(exe *analysis.Executable) (uint, error) {
 	behavior := jsonResponse["behavior"].(map[string]interface{})
 	processes := behavior["processes"].([]interface{})
 
+	var highestPrediction float32 = 0
+
 	for _, process := range processes {
 		calls := process.(map[string]interface{})["calls"].([]interface{})
-		syscalls := make([]int, 1)
+		syscalls := make([]int, 0)
 
 		for _, call := range calls {
 			syscallName := call.(map[string]interface{})["api"].(string)
-			syscalls = append(syscalls, dynamic.Syscalls[syscallName])
+
+			if syscall, present := dynamic.Syscalls[syscallName]; present {
+				syscalls = append(syscalls, syscall)
+			}
 		}
 
-		modelScore, err := dynamic.ApplyModel(syscalls)
+		prediction, err := dynamic.ApplyModel(syscalls)
 
-		if modelScore > 60 {
+		if prediction > 0.5 {
 			return 100, err
+		} else if err != nil {
+			return 0, err
+		}
+
+		if highestPrediction < prediction {
+			highestPrediction = prediction
 		}
 	}
 
-	return 0, nil
+	return uint(highestPrediction * 100 / 0.5), nil
 }
 
 func malwareDetected(exe *analysis.Executable) {
@@ -338,7 +349,19 @@ func malwareDetected(exe *analysis.Executable) {
 		choice string
 	)
 
-	logger.Danger(exe.Filename + " is a malware")
+	logger.Danger(exe.Filename + " classified as a malware")
+
+	err = beeep.Beep(beeep.DefaultFreq, 3000)
+	if err != nil {
+		logger.Fatal(err.Error())
+	}
+
+	err = beeep.Alert("Malware detected !", exe.Filename+" has been identified as a malware, do you want to delete it ?", "")
+
+	if err != nil {
+		logger.Fatal(err.Error())
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
 	for choice != "yes" && choice != "no" {
@@ -355,6 +378,6 @@ func malwareDetected(exe *analysis.Executable) {
 	if choice == "yes" {
 		logger.Info("Deleting malware...")
 	} else {
-		logger.Info("Ignoring...")
+		logger.Danger("Ignoring...")
 	}
 }

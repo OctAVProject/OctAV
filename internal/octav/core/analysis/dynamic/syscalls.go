@@ -1,16 +1,73 @@
 package dynamic
 
 import (
+	"errors"
 	"fmt"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
+	tf "github.com/tensorflow/tensorflow/tensorflow/go"
+	"os"
 )
 
-func ApplyModel(syscalls []int) (float64, error) {
+const MAX_SYSCALL_VALUE = 32
+
+func ApplyModel(syscalls []int) (float32, error) {
 	logger.Info("Applying ML model on syscall sequences...")
 
-	logger.Debug(fmt.Sprintf("%v", syscalls))
+	var onehots [][MAX_SYSCALL_VALUE]float32
 
-	return 0, nil
+	for _, syscall := range syscalls {
+		if syscall < 32 {
+			var onehot [MAX_SYSCALL_VALUE]float32
+			onehot[syscall] = 1
+			onehots = append(onehots, onehot)
+		}
+	}
+
+	// Only print tensorflow errors
+	if err := os.Setenv("TF_CPP_MIN_LOG_LEVEL", "2"); err != nil {
+		return 0, err
+	}
+
+	model, err := tf.LoadSavedModel("OctavToGo", []string{"Octav_32"}, nil)
+
+	if err != nil {
+		return 0, err
+	}
+
+	defer model.Session.Close()
+
+	var syscallSeq [][][MAX_SYSCALL_VALUE]float32
+	syscallSeq = append(syscallSeq, onehots)
+
+	var matrix *tf.Tensor
+
+	if matrix, err = tf.NewTensor(syscallSeq); err != nil {
+		panic(err.Error())
+	}
+
+	result, err := model.Session.Run(
+		map[tf.Output]*tf.Tensor{
+			model.Graph.Operation("conv1d_1_input").Output(0): matrix,
+		},
+		[]tf.Output{
+			model.Graph.Operation("dense_1/Sigmoid").Output(0),
+		},
+		nil,
+	)
+
+	if err != nil {
+		return 0, err
+	}
+
+	prediction, ok := result[0].Value().([][]float32)
+
+	if !ok {
+		return 0, errors.New("cannot compute prediction")
+	}
+
+	logger.Debug(fmt.Sprintf("Model output prediction : %v", prediction))
+
+	return prediction[0][0], nil
 }
 
 var Syscalls = map[string]int{
@@ -24,6 +81,7 @@ var Syscalls = map[string]int{
 	"poll":                   7,
 	"lseek":                  8,
 	"mmap":                   9,
+	"mmap2":                  9,
 	"mprotect":               10,
 	"munmap":                 11,
 	"brk":                    12,
