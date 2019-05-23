@@ -71,7 +71,7 @@ func GetHighestSSDeepDistance(exe *analysis.Executable) (int, error) {
 		return 0, nil
 	}
 
-	filename := "files/ssdeep_hashes/ssdeep.txt"
+	filename := "files/ssdeep_hashes.txt"
 
 	file, err := os.OpenFile(filename, os.O_RDONLY, os.ModePerm)
 
@@ -92,7 +92,6 @@ func GetHighestSSDeepDistance(exe *analysis.Executable) (int, error) {
 
 	for scanner.Scan() {
 		cCurrentSSDeep := C.CString(scanner.Text())
-
 		distance := int(C.fuzzy_compare(cCurrentSSDeep, cSSDeep))
 
 		if highestSSDeepDistance < distance {

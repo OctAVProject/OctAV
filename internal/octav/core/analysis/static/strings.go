@@ -26,7 +26,7 @@ func MaliciousDomainFound(exeContent []byte) (bool, error) {
 		logger.Debug(fmt.Sprintf("Found '%v' in binary", string(domain)))
 	}
 
-	file, err := os.Open("files/malicious_domains_and_ips/justdomains")
+	file, err := os.Open("files/justdomains")
 	if err != nil {
 		logger.Error("Error occurred when opening 'justdomains' : " + err.Error())
 		return false, err

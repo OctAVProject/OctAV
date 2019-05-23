@@ -6,6 +6,7 @@ import (
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"github.com/fsnotify/fsnotify"
 	"log"
+	"time"
 )
 
 func Watch(directories []string) error {
@@ -29,8 +30,9 @@ func Watch(directories []string) error {
 
 				if /*event.Op & fsnotify.Write > 0 || */ event.Op&fsnotify.Create > 0 {
 					logger.Info(fmt.Sprintf("Event %v", event))
+					time.Sleep(time.Second * 3) // TODO : fix
 					if err := core.Analyse(event.Name); err != nil {
-						logger.Debug(err.Error())
+						logger.Error(err.Error())
 					}
 				}
 
