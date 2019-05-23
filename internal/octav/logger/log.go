@@ -17,13 +17,13 @@ const (
 
 func Debug(msg string) {
 	if verboseLevel == VERBOSE_DEBUG {
-		fmt.Printf("%v[DEBUG]%v [%v] %v\n", DebugColor, getCurrentTime(), ResetColor, msg)
+		fmt.Printf("%v[DEBUG] [%v] %v%v\n", DebugColor, getCurrentTime(), ResetColor, msg)
 	}
 }
 
 func Info(msg string) {
 	if verboseLevel == VERBOSE_DEBUG {
-		fmt.Printf("%v[INFO]%v [%v] %v\n", InfoColor, getCurrentTime(), ResetColor, msg)
+		fmt.Printf("%v[INFO] [%v] %v%v\n", InfoColor, getCurrentTime(), ResetColor, msg)
 	} else if verboseLevel >= VERBOSE_INFO {
 		fmt.Printf("%v[INFO]%v %v\n", InfoColor, ResetColor, msg)
 	}
@@ -35,7 +35,7 @@ func Header(title string) {
 
 func Warning(msg string) {
 	if verboseLevel == VERBOSE_DEBUG {
-		fmt.Printf("%v[WARN]%v [%v] %v\n", WarningColor, getCurrentTime(), ResetColor, msg)
+		fmt.Printf("%v[WARN] [%v] %v%v\n", WarningColor, getCurrentTime(), ResetColor, msg)
 	} else if verboseLevel >= VERBOSE_WARNING {
 		fmt.Printf("%v[WARN]%v %v\n", WarningColor, ResetColor, msg)
 	}

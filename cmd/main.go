@@ -65,7 +65,7 @@ func main() {
 
 	logger.SetVerboseLevel(commandLine.Verbose)
 
-	if commandLine.Sync {
+	if _, err := os.Stat("/path/to/whatever"); os.IsNotExist(err) || commandLine.Sync {
 		core.SyncDatabase()
 	}
 
