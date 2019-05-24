@@ -6,6 +6,7 @@ import (
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func FullScan() {
@@ -13,13 +14,17 @@ func FullScan() {
 	scanDirectory("/")
 }
 
-// The idea is to scan places where unprivileged users can write
 func FastScan() {
 
 	directoriesToScan := []string{
-		//"/home",
-		"/tmp/malwares",
-		//"/opt",
+		"/home",
+		"/opt",
+	}
+
+	path := os.Getenv("PATH")
+
+	for _, directory := range strings.Split(path, ":") {
+		directoriesToScan = append(directoriesToScan, directory)
 	}
 
 	logger.Info("Fast scan starting...")
