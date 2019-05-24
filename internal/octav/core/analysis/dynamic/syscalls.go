@@ -28,7 +28,7 @@ func ApplyModel(syscalls []int) (float32, error) {
 		return 0, err
 	}
 
-	model, err := tf.LoadSavedModel("OctavToGo", []string{"Octav_32"}, nil)
+	model, err := tf.LoadSavedModel("files/OctavToGo", []string{"Octav_32"}, nil)
 
 	if err != nil {
 		return 0, err
