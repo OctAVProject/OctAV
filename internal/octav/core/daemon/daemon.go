@@ -13,7 +13,7 @@ func Manage(command string) error {
 		directories_to_watch []string
 	)
 
-	if err = core.Initialize(); err != nil {
+	if err = core.Initialize(true); err != nil {
 		return err
 	}
 

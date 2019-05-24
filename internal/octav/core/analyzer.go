@@ -10,7 +10,7 @@ import (
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/dynamic"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/static"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
-	"github.com/gen2brain/beeep"
+	"github.com/sqweek/dialog"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -351,33 +351,31 @@ func malwareDetected(exe *analysis.Executable) {
 
 	logger.Danger(exe.Filename + " classified as a malware")
 
-	err = beeep.Beep(beeep.DefaultFreq, 3000)
-	if err != nil {
-		logger.Fatal(err.Error())
-	}
+	if !DaemonMode {
+		reader := bufio.NewReader(os.Stdin)
 
-	err = beeep.Alert("Malware detected !", exe.Filename+" has been identified as a malware, do you want to delete it ?", "")
+		for choice != "yes" && choice != "no" {
+			fmt.Print("Do you want to delete this file ? [yes/no] ")
+			choice, err = reader.ReadString('\n')
 
-	if err != nil {
-		logger.Fatal(err.Error())
-	}
+			if err != nil {
+				logger.Fatal(err.Error())
+			}
 
-	reader := bufio.NewReader(os.Stdin)
-
-	for choice != "yes" && choice != "no" {
-		fmt.Print("Do you want to delete this file ? [yes/no] ")
-		choice, err = reader.ReadString('\n')
-
-		if err != nil {
-			logger.Fatal(err.Error())
+			choice = strings.ToLower(choice[:len(choice)-1])
 		}
 
-		choice = strings.ToLower(choice[:len(choice)-1])
+		if choice == "yes" {
+			logger.Info("Deleting malware...")
+		} else {
+			logger.Danger("Not deleting " + exe.Filename)
+		}
+	} else {
+		if dialog.Message("%s", exe.Filename+" has been identified as a malware, do you want to delete it ?").Title("Malware detected !").YesNo() {
+			logger.Info("Deleting malware...")
+		} else {
+			logger.Danger("Not deleting " + exe.Filename)
+		}
 	}
 
-	if choice == "yes" {
-		logger.Info("Deleting malware...")
-	} else {
-		logger.Danger("Ignoring...")
-	}
 }

@@ -69,7 +69,7 @@ func main() {
 		core.SyncDatabase()
 	}
 
-	if err = core.Initialize(); err != nil {
+	if err = core.Initialize(false); err != nil {
 		logger.Fatal("Can't initialize the core : " + err.Error())
 	}
 
