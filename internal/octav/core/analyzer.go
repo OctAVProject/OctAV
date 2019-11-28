@@ -2,8 +2,6 @@ package core
 
 import (
 	"bufio"
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis"
@@ -11,8 +9,6 @@ import (
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/static"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"github.com/sqweek/dialog"
-	"mime/multipart"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -209,125 +205,51 @@ func dynamicAnalysis(exe *analysis.Executable) (uint, error) {
 	logger.Header("dynamic analysis")
 	logger.Info("Analysing binary in a sandboxed environment, this might take some time...")
 
-	var requestBody bytes.Buffer
-
-	writer := multipart.NewWriter(&requestBody)
-
-	fieldWriter, err := writer.CreateFormFile("file", exe.Filename)
+	jsonReport, err := dynamic.SendFileToSandBox(exe)
 	if err != nil {
 		return 0, err
 	}
 
-	_, err = fieldWriter.Write(exe.Content)
-	if err != nil {
-		return 0, err
-	}
-
-	fieldWriter, err = writer.CreateFormField("unique")
-	if err != nil {
-		return 0, err
-	}
-
-	_, err = fieldWriter.Write([]byte("true"))
-	if err != nil {
-		return 0, err
-	}
-
-	writer.Close()
-
-	request, err := http.NewRequest("POST", "http://localhost:8090/tasks/create/file", &requestBody)
-	if err != nil {
-		return 0, err
-	}
-
-	request.Header.Set("Content-Type", writer.FormDataContentType())
-
-	client := &http.Client{}
-	resp, err := client.Do(request)
-	if err != nil {
-		return 0, err
-	}
-
-	defer resp.Body.Close()
-
-	var jsonResponse map[string]interface{}
-	var taskID int
-
-	if resp.StatusCode == http.StatusOK {
-		logger.Debug("Binary has been submitted to the Cuckoo Sandbox")
-
-		if json.NewDecoder(resp.Body).Decode(&jsonResponse) != nil {
-			return 0, err
-		}
-
-		taskID = int(jsonResponse["task_id"].(float64))
-
-	} else if resp.StatusCode == http.StatusBadRequest {
-		logger.Debug("Binary has already been analysed by the Cuckoo Sandbox")
-
-		resp, err = http.Get("http://localhost:8090/files/view/sha256/" + exe.SHA256)
-		if err != nil {
-			return 0, err
-		}
-
-		if json.NewDecoder(resp.Body).Decode(&jsonResponse) != nil {
-			return 0, nil
-		}
-
-		sample := jsonResponse["sample"].(map[string]interface{})
-		logger.Debug(fmt.Sprintf("sample: %v", sample))
-		taskID = int(sample["id"].(float64))
-		resp.Body.Close()
-	}
-
-	logger.Debug(fmt.Sprintf("Cuckoo Task ID: %v", taskID))
-
-	for {
-		resp, err = http.Get(fmt.Sprintf("http://localhost:8090/tasks/report/%v", taskID))
-		if err != nil {
-			return 0, err
-		}
-
-		if resp.StatusCode == http.StatusOK {
-			break
-		}
-
-		resp.Body.Close()
-
-		logger.Debug("Waiting for the report...")
-		time.Sleep(2 * time.Second)
-	}
-
-	logger.Debug(string("Report ready !"))
-
-	if json.NewDecoder(resp.Body).Decode(&jsonResponse) != nil {
-		return 0, nil
-	}
-
-	resp.Body.Close()
-
-	if jsonResponse["behavior"] == nil {
+	if jsonReport["dynamic_analysis"] == nil {
 		return 0, errors.New("no behavior analysis in the report")
 	}
 
-	behavior := jsonResponse["behavior"].(map[string]interface{})
+	behavior := jsonReport["dynamic_analysis"].(map[string]interface{})
 	processes := behavior["processes"].([]interface{})
+	openedFiles := behavior["open_files"].([]interface{})
+
+	logger.Debug(fmt.Sprintf("%v processes were created", len(processes)))
+
+	for _, file := range openedFiles {
+		logger.Debug(fmt.Sprintf("Opened file: %v", file))
+	}
 
 	var highestPrediction float32 = 0
 
 	for _, process := range processes {
-		calls := process.(map[string]interface{})["calls"].([]interface{})
-		syscalls := make([]int, 0)
+		pid := fmt.Sprintf("%v", process.(map[string]interface{})["pid"].(float64)) // float to str
+		syscalls := behavior["syscalls"].([]interface{})
 
-		for _, call := range calls {
-			syscallName := call.(map[string]interface{})["api"].(string)
+		if len(syscalls) == 0 {
+			return 0, errors.New("no syscall were returned by the sandbox")
+		}
+
+		syscallsIds := make([]int, 0)
+
+		for _, syscall := range syscalls {
+
+			if syscall.(map[string]interface{})["pid"].(string) != pid {
+				continue
+			}
+
+			syscallName := syscall.(map[string]interface{})["name"].(string)
 
 			if syscall, present := dynamic.Syscalls[syscallName]; present {
-				syscalls = append(syscalls, syscall)
+				syscallsIds = append(syscallsIds, syscall)
 			}
 		}
 
-		prediction, err := dynamic.ApplyModel(syscalls)
+		prediction, err := dynamic.ApplyModel(syscallsIds)
 
 		if prediction > 0.5 {
 			return 100, err

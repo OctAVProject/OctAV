@@ -1,7 +1,11 @@
 package core
 
 import (
+	"errors"
+	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/dynamic"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/static"
+	"github.com/OctAVProject/OctAV/internal/octav/logger"
+	"github.com/coreos/go-systemd/dbus"
 	"github.com/hillu/go-yara"
 )
 
@@ -17,6 +21,33 @@ func Initialize(daemonMode bool) error {
 	}
 
 	DaemonMode = daemonMode
+
+	if isUp, err := dynamic.IsSandBoxUp(); !isUp {
+
+		if err != nil {
+			if DaemonMode { // In daemon mode, OctAV has root privileges
+				logger.Info("Docker daemon down, starting it...")
+				conn, err := dbus.NewSystemdConnection()
+				if err != nil {
+					return err
+				}
+
+				defer conn.Close()
+
+				_, err = conn.StartUnit("docker.service", "replace", nil)
+				if err != nil {
+					return err
+				}
+			} else { // Command line mode
+				return errors.New("the docker daemon is down, run 'sudo systemctl start docker'")
+			}
+		}
+
+		logger.Info("The sandbox is down, starting it...")
+		if err := dynamic.StartSandBox(); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
