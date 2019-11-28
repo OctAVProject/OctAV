@@ -86,7 +86,9 @@ func main() {
 	}
 
 	if commandLine.Configscan {
-		scan.FullConfigScan()
+		if err := scan.FullConfigScan(); err != nil {
+			logger.Fatal(err.Error())
+		}
 	}
 
 	if err = core.Stop(); err != nil {
