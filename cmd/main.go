@@ -18,8 +18,8 @@ type positionalArgs struct {
 var commandLine struct {
 	Verbose        string         `short:"l" long:"log-level" description:"Log level" choice:"DEBUG" choice:"INFO" choice:"WARNING" default:"INFO"`
 	Daemon         bool           `short:"d" long:"daemon" description:"Put OctAV in an endless loop, watching for events on the computer"`
-	Fastscan       bool           `short:"s" long:"fast-scan" description:"Full scan of the system, really time consuming"`
-	Fullscan       bool           `long:"full-scan" description:"Smart scan, looking in most probable places"`
+	Fastscan       bool           `short:"s" long:"fast-scan" description:"Smart scan, looking in most probable places"`
+	Fullscan       bool           `long:"full-scan" description:"Full scan of the system, really time consuming"`
 	Configscan     bool           `long:"config-scan" description:"Look at config files for security issues"`
 	Sync           bool           `long:"sync" description:"Synchronizes database"`
 	PositionalArgs positionalArgs `positional-args:"true"`
