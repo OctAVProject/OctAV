@@ -14,7 +14,7 @@ func ApplyModel(syscalls []int) (float32, error) {
 	logger.Info("Applying ML model on syscall sequences...")
 
 	syscalls_sequence_string := strings.Trim(strings.Replace(fmt.Sprint(syscalls), " ", ",", -1), "[]")
-	command := fmt.Sprintf("import script; print(script.predict(\"%s\"))", syscalls_sequence_string)
+	command := fmt.Sprintf("import predict; print(predict.predict(\"%s\"))", syscalls_sequence_string)
 	cmd := exec.Command("python",  "-c", command)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
