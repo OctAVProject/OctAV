@@ -69,6 +69,16 @@ func main() {
 		core.SyncDatabase()
 	}
 
+	if commandLine.Configscan {
+		if err := scan.FullConfigScan(); err != nil {
+			logger.Fatal(err.Error())
+		}
+
+		return
+	}
+
+	// No need to have the core initialized for a config scan
+
 	if err = core.Initialize(false); err != nil {
 		logger.Fatal("Can't initialize the core : " + err.Error())
 	}
@@ -81,12 +91,6 @@ func main() {
 		err := core.Analyse(fileToScan)
 
 		if err != nil {
-			logger.Fatal(err.Error())
-		}
-	}
-
-	if commandLine.Configscan {
-		if err := scan.FullConfigScan(); err != nil {
 			logger.Fatal(err.Error())
 		}
 	}
