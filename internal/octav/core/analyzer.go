@@ -224,7 +224,7 @@ func dynamicAnalysis(exe *analysis.Executable) (uint, error) {
 		logger.Debug(fmt.Sprintf("Opened file: %v", file))
 	}
 
-	var highestPrediction float32 = 0
+	syscallsIds := make([]int, 0)
 
 	for _, process := range processes {
 		pid := fmt.Sprintf("%v", process.(map[string]interface{})["pid"].(float64)) // float to str
@@ -233,8 +233,6 @@ func dynamicAnalysis(exe *analysis.Executable) (uint, error) {
 		if len(syscalls) == 0 {
 			return 0, errors.New("no syscall were returned by the sandbox")
 		}
-
-		syscallsIds := make([]int, 0)
 
 		for _, syscall := range syscalls {
 
@@ -248,21 +246,11 @@ func dynamicAnalysis(exe *analysis.Executable) (uint, error) {
 				syscallsIds = append(syscallsIds, syscall)
 			}
 		}
-
-		prediction, err := dynamic.ApplyModel(syscallsIds)
-
-		if prediction > 0.5 {
-			return 100, err
-		} else if err != nil {
-			return 0, err
-		}
-
-		if highestPrediction < prediction {
-			highestPrediction = prediction
-		}
 	}
+	
+	prediction, err := dynamic.ApplyModel(syscallsIds)
 
-	return uint(highestPrediction * 100 / 0.5), nil
+	return uint(prediction * 100 / 0.5), nil
 }
 
 func malwareDetected(exe *analysis.Executable) {
