@@ -13,61 +13,19 @@ const MAX_SYSCALL_VALUE = 32
 func ApplyModel(syscalls []int) (float32, error) {
 	logger.Info("Applying ML model on syscall sequences...")
 
-	var onehots [][MAX_SYSCALL_VALUE]float32
-
-	for _, syscall := range syscalls {
-		if syscall < 32 {
-			var onehot [MAX_SYSCALL_VALUE]float32
-			onehot[syscall] = 1
-			onehots = append(onehots, onehot)
-		}
-	}
-
-	// Only print tensorflow errors
-	if err := os.Setenv("TF_CPP_MIN_LOG_LEVEL", "2"); err != nil {
-		return 0, err
-	}
-
-	model, err := tf.LoadSavedModel("files/OctavToGo", []string{"Octav_32"}, nil)
-
+	syscalls_sequence_string := strings.Trim(strings.Replace(fmt.Sprint(syscalls), " ", ",", -1), "[]")
+	command := fmt.Sprintf("import script; print(script.predict(\"%s\"))", syscalls_sequence_string)
+	cmd := exec.Command("python",  "-c", command)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return 0, err
-	}
-
-	defer model.Session.Close()
-
-	var syscallSeq [][][MAX_SYSCALL_VALUE]float32
-	syscallSeq = append(syscallSeq, onehots)
-
-	var matrix *tf.Tensor
-
-	if matrix, err = tf.NewTensor(syscallSeq); err != nil {
-		panic(err.Error())
-	}
-
-	result, err := model.Session.Run(
-		map[tf.Output]*tf.Tensor{
-			model.Graph.Operation("conv1d_1_input").Output(0): matrix,
-		},
-		[]tf.Output{
-			model.Graph.Operation("dense_1/Sigmoid").Output(0),
-		},
-		nil,
-	)
-
-	if err != nil {
-		return 0, err
-	}
-
-	prediction, ok := result[0].Value().([][]float32)
-
-	if !ok {
 		return 0, errors.New("cannot compute prediction")
 	}
+	prediction_value_string := strings.Split(string(out), "\r\n")[len(strings.Split(string(out), "\r\n")) - 2]
+	prediction, err := strconv.ParseFloat(prediction_value_string, 32)
 
-	logger.Debug(fmt.Sprintf("Model output prediction : %v", prediction))
+	logger.Debug(fmt.Sprintf("Model output prediction : %s", prediction_value_string))
 
-	return prediction[0][0], nil
+	return prediction, nil
 }
 
 var Syscalls = map[string]int{
