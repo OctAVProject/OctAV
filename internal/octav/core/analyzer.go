@@ -249,6 +249,14 @@ func dynamicAnalysis(exe *analysis.Executable) (uint, error) {
 	}
 	
 	prediction, err := dynamic.ApplyModel(syscallsIds)
+	
+	prediction_threshold := 0.5
+	
+	if prediction > prediction_threshold {
+		return 100, err
+	} else if err != nil {
+		return 0, err
+	}
 
 	return uint(prediction * 100 / 0.5), nil
 }
