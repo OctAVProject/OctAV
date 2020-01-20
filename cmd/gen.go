@@ -5,5 +5,5 @@ import "github.com/zserge/lorca"
 func main() {
 	// You can also run "npm build" or webpack here, or compress assets, or
 	// generate manifests, or do other preparations for your assets.
-	lorca.Embed("gui", "assets.go", "OctAV-GUI")
+	lorca.Embed("gui", "internal/octav/gui/assets.go", "assets/OctAV-GUI")
 }

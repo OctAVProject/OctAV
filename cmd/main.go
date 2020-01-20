@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/OctAVProject/OctAV/internal/octav/core"
 	"github.com/OctAVProject/OctAV/internal/octav/core/daemon"
+	"github.com/OctAVProject/OctAV/internal/octav/gui"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"github.com/OctAVProject/OctAV/internal/octav/scan"
 	"github.com/jessevdk/go-flags"
@@ -22,6 +23,7 @@ var commandLine struct {
 	Fullscan       bool           `long:"full-scan" description:"Full scan of the system, really time consuming"`
 	Configscan     bool           `long:"config-scan" description:"Look at config files for security issues"`
 	Sync           bool           `long:"sync" description:"Synchronizes database"`
+	GUI            bool           `long:"gui" description:"Starts OctAV's Analysis"`
 	PositionalArgs positionalArgs `positional-args:"true"`
 }
 
@@ -36,6 +38,10 @@ func main() {
 
 	if flagsErr, ok := err.(*flags.Error); ok && flagsErr.Type == flags.ErrHelp {
 		return
+	}
+
+	if commandLine.Daemon && commandLine.GUI {
+		logger.Fatal("You cannot use --gui and --daemon together")
 	}
 
 	if commandLine.Daemon {
@@ -83,14 +89,20 @@ func main() {
 		logger.Fatal("Can't initialize the core : " + err.Error())
 	}
 
-	if commandLine.Fastscan {
+	if commandLine.GUI {
+		if err := gui.CreateGUIBindings(); err != nil {
+			logger.Fatal(err.Error())
+		} else {
+			logger.Info("Bye !")
+		}
+	} else if commandLine.Fastscan {
 		scan.FastScan()
 	} else if commandLine.Fullscan {
 		scan.FullScan()
 	} else if fileToScan != "" {
-		err := core.Analyse(fileToScan)
+		analysis := core.Analysis{Files: []string{fileToScan}}
 
-		if err != nil {
+		if err = analysis.Start(); err != nil {
 			logger.Fatal(err.Error())
 		}
 	}

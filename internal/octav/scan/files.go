@@ -35,6 +35,9 @@ func FastScan() {
 }
 
 func scanDirectory(directory string) {
+
+	analysis := core.Analysis{}
+
 	err := filepath.Walk(directory, func(path string, f os.FileInfo, err error) error {
 
 		// Skip directories errors (such as permission denied)
@@ -44,14 +47,17 @@ func scanDirectory(directory string) {
 
 		// Analysing files
 		if !f.IsDir() {
-			//TODO : use goroutines here, but be careful not to start 100k analysis at the same time !
-			_ = core.Analyse(path) // We don't care about errors in a multiple files scan
+			analysis.Files = append(analysis.Files, path)
 		}
 
 		return err
 	})
 
 	if err != nil {
-		panic(err)
+		logger.Fatal("Directory scanning error : " + err.Error())
+	}
+
+	if err = analysis.Start(); err != nil {
+		logger.Fatal("Directory scanning error : " + err.Error())
 	}
 }

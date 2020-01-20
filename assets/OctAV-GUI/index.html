@@ -18,7 +18,7 @@
         <nav class="navbar navbar-dark align-items-start sidebar sidebar-dark accordion bg-gradient-primary p-0">
             <div class="container-fluid d-flex flex-column p-0">
                 <a class="navbar-brand text-capitalize d-flex justify-content-center align-items-center sidebar-brand m-0" href="/index.html">
-                    <div class="sidebar-brand-icon rotate-n-15"><i class="fab fa-linux" style="letter-spacing: octav;"></i></div>
+                    <div class="sidebar-brand-icon rotate-n-15"><i class="fab fa-linux"></i></div>
                     <div class="sidebar-brand-text mx-3"><span style="font-size: 150%;">OctAV</span></div>
                 </a>
                 <hr class="sidebar-divider my-0">
@@ -45,7 +45,7 @@
                                         </div>
                                     </div>
                                     <div class="row">
-                                        <div class="col"><button class="btn btn-light browse" type="button">Browse...</button></div>
+                                        <div class="col"><button class="btn btn-light" id="browseButton" type="button">Browse...</button></div>
                                     </div>
                                     <div class="col" style="margin-top: 20px;">
                                         <div class="table-responsive">
@@ -59,7 +59,7 @@
                                         </div>
                                     </div>
                                     <div class="row">
-                                        <div class="col"><button class="btn btn-primary trigger_analysis" type="button" style="margin-top: 20px;" >Analyse</button></div>
+                                        <div class="col"><button class="btn btn-primary" id="trigger_analysis" type="button" style="margin-top: 20px;" >Analyse</button></div>
                                         <div class="col"><button class="btn btn-danger" type="button" style="margin-top: 20px;">Cancel</button></div>
                                     </div>
                                 </div>
@@ -76,14 +76,14 @@
                                     <div class="row">
                                         <div class="col">
                                             <div class="progress" style="margin: 10px;visibility: hidden">
-                                                <div class="progress-bar progress-bar-striped progress-bar-animated" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="">0%</div>
+                                                <div class="progress-bar progress-bar-striped progress-bar-animated" id="analysisProgressBar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="">0%</div>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="row">
                                         <div class="col">
                                             <ul class="list-group">
-                                                <li class="list-group-item analysis_results"><span>Waiting for binary&nbsp;<i class="far fa-smile-beam" style="padding-right: 10px;"></i></span></li>
+                                                <li class="list-group-item" id="analysisResults"><span>Waiting for binary&nbsp;<i class="far fa-smile-beam" style="padding-right: 10px;"></i></span></li>
                                             </ul>
                                         </div>
                                     </div>
@@ -100,70 +100,89 @@
             </footer>
         </div>
     </div>
+
+    <script src="jquery.min.js"></script>
+    <script src="bootstrap.min.js"></script>
+    <script src="jquery.easing.js"></script>
+    <script src="script.min.js"></script>
+
     <script>
+        let filesToAnalyse = [];
 
-        const text_result_analysis = document.querySelector('.analysis_results');
-        const btnTrig = document.querySelector('.trigger_analysis');
-        const btnBrowse = document.querySelector('.browse');
-        var files;
+        async function update_ui() {
+            let progressBar = $('#analysisProgressBar');
 
-        const render = async () => {
-            //show/hide progress bar / document.querySelector('.progress_visibility').removeAttribute("style")
-            text_result_analysis.innerText = `${await window.getAnalysisResult()}`;
-            var status = `${await window.status_analysis()}`;
+            if(await isAnalysisRunning() === true) {
+                let progress = await getProgress() + "%";
 
-            if (status == "true") {
-                document.querySelector('.progress').style.visibility = 'visible';
-                var update = setInterval(
-                    async () => {
-                        text_result_analysis.innerText = `${await window.getAnalysisResult()}`;
-                        status = `${await window.status_analysis()}`;
-                        if (`${await window.status_analysis()}` == "false"){
-                            clearInterval(update);
-                        }
-                    },
-                    2000 //2 sec
-                );
+                progressBar[0].style.visibility = 'visible';
+                progressBar[0].style.width = progress;
+                progressBar.text(progress);
 
-            }else {
-                document.querySelector('.progress').style.visibility='hidden';
+                let logs = await getLogs();
+                let logsHtml = "";
+
+                logs.forEach(function (log) {
+                    if(log.IsError)
+                        logsHtml += "<p><i class=\"fas fa-times\"></i>&nbsp;" + log.Content + "</p>";
+                    else
+                        logsHtml += "<p><i class=\"fas fa-info\"></i>&nbsp;" + log.Content + "</p>";
+                });
+
+                $("#analysisResults").html(logsHtml);
             }
-        };
-
-        const removeMySelf = async(file_num) => {
-            await removeFile(file_num);
-            var theTable = document.getElementById("tableOfFiles");
-            theFilesArray = await makeArray();
-            theTable.innerHTML = theFilesArray;
-
-            render();
+            else {
+                progressBar[0].style.visibility = 'hidden';
+            }
         }
 
-        btnTrig.addEventListener('click', async () => {
-            await launchAnalysis(); // Call Go function
-            var theTable = document.getElementById("tableOfFiles");
-            theFilesArray = await makeArray();
-            theTable.innerHTML = theFilesArray;
+        function removeFileEntry(pressedButton) {
+            let fileEntry = $(pressedButton).parents(".file-entry");
+            let filepath = fileEntry.data("filepath");
+            fileEntry.remove();
+            filesToAnalyse.splice(filesToAnalyse.indexOf(filepath), 1); // remove file from global array
+        }
 
-            render();
-        });
+        $( document ).ready(function() {
 
-        btnBrowse.addEventListener('click', async () => {
-            await openFileChooser(); // Call Go function
+            setInterval(update_ui, 1000);
 
-            var theTable = document.getElementById("tableOfFiles");
-            theFilesArray = await makeArray();
-            theTable.innerHTML = theFilesArray;
+            $('#trigger_analysis').click(async function () {
+                $("#tableOfFiles tbody").html("");
+                $("#trigger_analysis").prop('disabled', true);
+                $("#browseButton").prop('disabled', true);
 
-            render();
+                await launchAnalysis(filesToAnalyse); // Call Go function
+
+                filesToAnalyse.length = 0;
+                $("#trigger_analysis").prop('disabled', false);
+                $("#browseButton").prop('disabled', false);
+            });
+
+            $('#browseButton').click(async function () {
+                let newFiles = await openFileChooser(); // Call Go function
+
+                newFiles.forEach(function (file) {
+                    filesToAnalyse.push(file);
+                });
+
+                let resultHtml = "";
+
+                filesToAnalyse.forEach(function (file) {
+                    resultHtml += `<tr class="file-entry" data-filepath="` + file + `">
+                                        <td style="width: 10%%;">` + file.replace(/^.*[\\\/]/, '') + `</td>
+                                        <td><button class="btn btn-danger file-button" onclick="removeFileEntry(this);" type="button" style="margin-right: -65px;margin-left: 25px;">X</button></td>
+                                   </tr>`;
+                });
+
+                $("#tableOfFiles tbody").html(resultHtml);
+                $("#trigger_analysis").prop('disabled', false);
+                $("#browseButton").prop('disabled', false);
+            });
         });
 
     </script>
 
-    <script src="jquery.min.js"></script>
-    <script src="bootstrap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.4.1/jquery.easing.js"></script>
-    <script src="script.min.js"></script>
 </body>
 
 </html>

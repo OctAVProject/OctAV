@@ -14,56 +14,117 @@ import (
 	"time"
 )
 
-func Analyse(filename string) error {
+type LogEntry struct {
+	Content string
+	IsError bool
+}
 
-	exe, err := analysis.LoadExecutable(filename)
+type Analysis struct {
+	Files             []string
+	FileBeingAnalysed string
+	IsRunning         bool
+	Progress          float64
+	Logs              []LogEntry
+}
 
-	if err != nil {
-		return err
+func (currentAnalysis *Analysis) AddInfo(msg string) {
+	currentAnalysis.Logs = append(currentAnalysis.Logs, LogEntry{Content: msg, IsError: false})
+}
+
+func (currentAnalysis *Analysis) AddError(msg string) {
+	currentAnalysis.Logs = append(currentAnalysis.Logs, LogEntry{Content: msg, IsError: true})
+}
+
+func (currentAnalysis *Analysis) Start() error {
+
+	var (
+		staticThreatScore  uint
+		dynamicThreatScore uint
+		exe                *analysis.Executable
+		start              time.Time
+		elapsed            time.Duration
+		err                error
+	)
+
+	currentAnalysis.IsRunning = true
+	maxProgressPerFile := 100. / float64(len(currentAnalysis.Files))
+
+	for _, filepath := range currentAnalysis.Files {
+		fileProgress := 0.
+		currentAnalysis.Progress += fileProgress * maxProgressPerFile / 100.
+
+		logger.Info("Analysing " + filepath)
+		currentAnalysis.AddInfo("Analysing " + filepath)
+		exe, err = analysis.LoadExecutable(filepath)
+
+		if err != nil {
+			logger.Error(err.Error())
+			currentAnalysis.AddError(err.Error())
+			goto NextFile
+		}
+
+		fileProgress = 5.                                          // 5% of the file analysis is done
+		currentAnalysis.Progress += 5. * maxProgressPerFile / 100. // +5%
+
+		logger.Debug(exe.String())
+
+		start = time.Now()
+		staticThreatScore, err = staticAnalysis(exe)
+
+		if err != nil {
+			errStr := "Not able to perform static analysis : " + err.Error()
+			logger.Error(errStr)
+			currentAnalysis.AddError(errStr)
+			goto NextFile
+		}
+
+		fileProgress = 25.                                          // 25% of the file analysis is done
+		currentAnalysis.Progress += 20. * maxProgressPerFile / 100. // +20%
+
+		elapsed = time.Now().Sub(start)
+		logger.Info(fmt.Sprintf("Static Analysis done in %v", elapsed))
+
+		logger.Info(fmt.Sprintf("Static score: %v", staticThreatScore))
+
+		if staticThreatScore >= 100 {
+			malwareDetected(exe)
+			goto NextFile
+		}
+
+		start = time.Now()
+		dynamicThreatScore, err = dynamicAnalysis(exe)
+
+		if err != nil {
+			errStr := "Not able to perform dynamic analysis : " + err.Error()
+			logger.Error(errStr)
+			currentAnalysis.AddError(errStr)
+			goto NextFile
+		}
+
+		fileProgress = 99.                                          // 99% of the file analysis is done
+		currentAnalysis.Progress += 74. * maxProgressPerFile / 100. // +74%
+
+		elapsed = time.Now().Sub(start)
+		logger.Info(fmt.Sprintf("Dynamic Analysis done in %v", elapsed))
+
+		logger.Info(fmt.Sprintf("Dynamic score: %v", dynamicThreatScore))
+
+		if dynamicThreatScore >= 100 {
+			currentAnalysis.AddError("Malware detected : " + filepath)
+			malwareDetected(exe)
+		} else if staticThreatScore+dynamicThreatScore >= 170 {
+			currentAnalysis.AddError("Malware detected : " + filepath)
+			malwareDetected(exe)
+		}
+
+		elapsed = time.Now().Sub(start)
+		currentAnalysis.AddInfo(fmt.Sprintf("File analysis done in %v", elapsed))
+
+	NextFile:
+		currentAnalysis.Progress += (100. - fileProgress) * maxProgressPerFile / 100. // Add the remaining to make 100%
 	}
 
-	logger.Info("Analysing " + filename)
-	logger.Debug(exe.String())
-
-	start := time.Now()
-	staticThreatScore, err := staticAnalysis(exe)
-
-	if err != nil {
-		return errors.New("Not able to perform static analysis : " + err.Error())
-	}
-
-	elapsed := time.Now().Sub(start)
-	logger.Info(fmt.Sprintf("Static Analysis done in %v", elapsed))
-
-	logger.Info(fmt.Sprintf("Static score: %v", staticThreatScore))
-
-	if staticThreatScore >= 100 {
-		malwareDetected(exe)
-		return nil
-	}
-
-	start = time.Now()
-	dynamicThreatScore, err := dynamicAnalysis(exe)
-
-	if err != nil {
-		return errors.New("Not able to perform dynamic analysis : " + err.Error())
-	}
-
-	elapsed = time.Now().Sub(start)
-	logger.Info(fmt.Sprintf("Dynamic Analysis done in %v", elapsed))
-
-	logger.Info(fmt.Sprintf("Dynamic score: %v", dynamicThreatScore))
-
-	if dynamicThreatScore >= 100 {
-		malwareDetected(exe)
-		return nil
-	}
-
-	if staticThreatScore+dynamicThreatScore >= 170 {
-		malwareDetected(exe)
-		return nil
-	}
-
+	currentAnalysis.IsRunning = false
 	return nil
 }
 
@@ -247,11 +308,11 @@ func dynamicAnalysis(exe *analysis.Executable) (uint, error) {
 			}
 		}
 	}
-	
+
 	prediction, err := dynamic.ApplyModel(syscallsIds)
-	
+
 	prediction_threshold := 0.5
-	
+
 	if prediction > prediction_threshold {
 		return 100, err
 	} else if err != nil {
@@ -289,6 +350,7 @@ func malwareDetected(exe *analysis.Executable) {
 			logger.Danger("Not deleting " + exe.Filename)
 		}
 	} else {
+
 		if dialog.Message("%s", exe.Filename+" has been identified as a malware, do you want to delete it ?").Title("Malware detected !").YesNo() {
 			logger.Info("Deleting malware...")
 		} else {
