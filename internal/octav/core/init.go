@@ -7,6 +7,8 @@ import (
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"github.com/coreos/go-systemd/dbus"
 	"github.com/hillu/go-yara"
+	"os"
+	"os/exec"
 )
 
 var yaraGrep *static.YaraGrep
@@ -22,7 +24,7 @@ func Initialize(daemonMode bool) error {
 
 	DaemonMode = daemonMode
 
-	if isUp, err := dynamic.IsSandBoxUp(); !isUp {
+	if isUp, err := dynamic.IsSandBoxUp(); !isUp && false {
 
 		if err != nil {
 			if DaemonMode { // In daemon mode, OctAV has root privileges
@@ -45,6 +47,21 @@ func Initialize(daemonMode bool) error {
 
 		logger.Info("The sandbox is down, starting it...")
 		if err := dynamic.StartSandBox(); err != nil {
+			return err
+		}
+	}
+
+	if _, err := os.Stat("venv"); os.IsNotExist(err) {
+		logger.Info("Python environment doesn't exist yet, preparing it...")
+		cmd := exec.Command("python3.7", "-m", "venv", "venv")
+
+		if err = cmd.Run(); err != nil {
+			return err
+		}
+
+		cmd = exec.Command("venv/bin/pip", "install", "tensorflow==2.0", "sklearn", "keras")
+
+		if err = cmd.Run(); err != nil {
 			return err
 		}
 	}

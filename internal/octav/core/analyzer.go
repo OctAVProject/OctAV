@@ -1,15 +1,12 @@
 package core
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/dynamic"
 	"github.com/OctAVProject/OctAV/internal/octav/core/analysis/static"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
-	"github.com/sqweek/dialog"
-	"os"
 	"strings"
 	"time"
 )
@@ -26,6 +23,8 @@ type Analysis struct {
 	Progress          float64
 	Logs              []LogEntry
 }
+
+var DetectedMalwares []*analysis.Executable
 
 func (currentAnalysis *Analysis) AddInfo(msg string) {
 	currentAnalysis.Logs = append(currentAnalysis.Logs, LogEntry{Content: msg, IsError: false})
@@ -87,6 +86,7 @@ func (currentAnalysis *Analysis) Start() error {
 		logger.Info(fmt.Sprintf("Static score: %v", staticThreatScore))
 
 		if staticThreatScore >= 100 {
+			currentAnalysis.AddError("Malware detected : " + filepath)
 			malwareDetected(exe)
 			goto NextFile
 		}
@@ -311,51 +311,55 @@ func dynamicAnalysis(exe *analysis.Executable) (uint, error) {
 
 	prediction, err := dynamic.ApplyModel(syscallsIds)
 
-	prediction_threshold := 0.5
+	predictionThreshold := 0.88
 
-	if prediction > prediction_threshold {
+	if prediction > predictionThreshold {
 		return 100, err
 	} else if err != nil {
 		return 0, err
 	}
 
-	return uint(prediction * 100 / 0.5), nil
+	return uint(prediction * 100 / predictionThreshold), nil
 }
 
 func malwareDetected(exe *analysis.Executable) {
-	var (
-		err    error
-		choice string
-	)
+	/*
+		var (
+			err    error
+			choice string
+		)
+	*/
 
+	DetectedMalwares = append(DetectedMalwares, exe)
 	logger.Danger(exe.Filename + " classified as a malware")
 
-	if !DaemonMode {
-		reader := bufio.NewReader(os.Stdin)
+	/*
+		if !DaemonMode {
+			reader := bufio.NewReader(os.Stdin)
 
-		for choice != "yes" && choice != "no" {
-			fmt.Print("Do you want to delete this file ? [yes/no] ")
-			choice, err = reader.ReadString('\n')
+			for choice != "yes" && choice != "no" {
+				fmt.Print("Do you want to delete this file ? [yes/no] ")
+				choice, err = reader.ReadString('\n')
 
-			if err != nil {
-				logger.Fatal(err.Error())
+				if err != nil {
+					logger.Fatal(err.Error())
+				}
+
+				choice = strings.ToLower(choice[:len(choice)-1])
 			}
 
-			choice = strings.ToLower(choice[:len(choice)-1])
-		}
-
-		if choice == "yes" {
-			logger.Info("Deleting malware...")
+			if choice == "yes" {
+				logger.Info("Deleting malware...")
+			} else {
+				logger.Danger("Not deleting " + exe.Filename)
+			}
 		} else {
-			logger.Danger("Not deleting " + exe.Filename)
-		}
-	} else {
 
-		if dialog.Message("%s", exe.Filename+" has been identified as a malware, do you want to delete it ?").Title("Malware detected !").YesNo() {
-			logger.Info("Deleting malware...")
-		} else {
-			logger.Danger("Not deleting " + exe.Filename)
+			if dialog.Message("%s", exe.Filename+" has been identified as a malware, do you want to delete it ?").Title("Malware detected !").YesNo() {
+				logger.Info("Deleting malware...")
+			} else {
+				logger.Danger("Not deleting " + exe.Filename)
+			}
 		}
-	}
-
+	*/
 }

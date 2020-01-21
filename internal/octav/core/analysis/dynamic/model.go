@@ -4,26 +4,58 @@ import (
 	"errors"
 	"fmt"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
-	tf "github.com/tensorflow/tensorflow/tensorflow/go"
-	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 )
 
-const MAX_SYSCALL_VALUE = 32
+// Unfortunatly Go's tensorflow bindinds don't support random forests, kinda dirty but we use python to apply the model
+var PYTHON_SCRIPT_MODEL_PREDICTION = `
+import pickle
+import os
+import sys
+from sklearn.ensemble import RandomForestClassifier
+from keras.preprocessing.sequence import pad_sequences
 
-func ApplyModel(syscalls []int) (float32, error) {
+if __name__ == "__main__":
+
+    if len(sys.argv) != 2:
+        exit(1)
+
+    syscall_sequence_string = sys.argv[1]
+    model_file_path = "files/"
+    
+    for filename in os.listdir(model_file_path):
+        if filename.startswith('random_forest_model'):
+            model_file_path += filename
+            break
+    
+    sequence_max_length = int(model_file_path.split("_")[-1])
+    syscall_sequence = syscall_sequence_string.split(",")
+
+    loaded_model = pickle.load(open(model_file_path, 'rb'))
+    prediction = loaded_model.predict_proba(pad_sequences([syscall_sequence], maxlen=sequence_max_length, padding='post'))
+    print(prediction[0][1])
+`
+
+func ApplyModel(syscalls []int) (float64, error) {
 	logger.Info("Applying ML model on syscall sequences...")
 
-	syscalls_sequence_string := strings.Trim(strings.Replace(fmt.Sprint(syscalls), " ", ",", -1), "[]")
-	command := fmt.Sprintf("import predict; print(predict.predict(\"%s\"))", syscalls_sequence_string)
-	cmd := exec.Command("python",  "-c", command)
+	syscallsSequenceString := strings.Trim(strings.Replace(fmt.Sprint(syscalls), " ", ",", -1), "[]")
+
+	cmd := exec.Command("venv/bin/python", "-c", PYTHON_SCRIPT_MODEL_PREDICTION, syscallsSequenceString)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return 0, errors.New("cannot compute prediction")
+		logger.Error(string(out))
+		return 0, errors.New("Cannot compute prediction : " + err.Error())
 	}
-	prediction_value_string := strings.Split(string(out), "\r\n")[len(strings.Split(string(out), "\r\n")) - 2]
-	prediction, err := strconv.ParseFloat(prediction_value_string, 32)
 
-	logger.Debug(fmt.Sprintf("Model output prediction : %s", prediction_value_string))
+	splitedLines := strings.Split(string(out), "\n")
+
+	predictionValueString := splitedLines[len(splitedLines)-2]
+	prediction, err := strconv.ParseFloat(predictionValueString, 32)
+
+	logger.Debug(fmt.Sprintf("Model output prediction : %v", predictionValueString))
 
 	return prediction, nil
 }
