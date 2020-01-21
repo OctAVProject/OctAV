@@ -3,6 +3,7 @@ package gui
 import (
 	"fmt"
 	"github.com/OctAVProject/OctAV/internal/octav/core"
+	"github.com/OctAVProject/OctAV/internal/octav/core/analysis"
 	"github.com/OctAVProject/OctAV/internal/octav/logger"
 	"github.com/jcmuller/gozenity"
 	"github.com/zserge/lorca"
@@ -45,6 +46,29 @@ func LaunchAnalysis(files []string) {
 	}
 }
 
+func GetDetectedMalwares() []analysis.Executable {
+	var malwares []analysis.Executable
+
+	for _, malware := range core.DetectedMalwares {
+		malwares = append(malwares, *malware)
+	}
+
+	return malwares
+}
+
+func RemoveMalware(filepath string) {
+	var newMalwareArray []*analysis.Executable
+
+	for _, malware := range core.DetectedMalwares {
+		if malware.Filename != filepath {
+			newMalwareArray = append(newMalwareArray, malware)
+		}
+	}
+
+	core.DetectedMalwares = newMalwareArray
+	logger.Info(filepath + " deleted !")
+}
+
 func IsAnalysisRunning() bool {
 	if currentAnalysis != nil {
 		return currentAnalysis.IsRunning
@@ -83,7 +107,7 @@ func CreateGUIBindings() error {
 	defer ui.Close()
 
 	err = ui.Bind("start", func() {
-		logger.Info("UI is ready")
+
 	})
 	if err != nil {
 		return err
@@ -112,6 +136,14 @@ func CreateGUIBindings() error {
 	}
 
 	if err = ui.Bind("getProgress", GetProgress); err != nil {
+		return err
+	}
+
+	if err = ui.Bind("getDetectedMalwares", GetDetectedMalwares); err != nil {
+		return err
+	}
+
+	if err = ui.Bind("removeMalware", RemoveMalware); err != nil {
 		return err
 	}
 
